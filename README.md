@@ -43,7 +43,7 @@ QRQueue/
 ## 技術スタック
 
 ### バックエンド
-- .NET 9.0
+- .NET 10.0
 - ASP.NET Core
 - Entity Framework Core
 - PostgreSQL
@@ -53,11 +53,11 @@ QRQueue/
 - TypeScript
 
 ### デスクトップアプリ
-- .NET 9.0
+- .NET 10.0
 - Avalonia UI
 
 ### 開発環境（.NET Aspire）
-- .NET Aspire 9.0
+- .NET Aspire 9.5
 
 ## 開発環境
 
@@ -65,7 +65,7 @@ QRQueue/
 
 | ソフトウェア | バージョン | 備考 |
 |-------------|-----------|------|
-| [.NET SDK](https://dotnet.microsoft.com/download) | 9.0 | `dotnet --version`で確認 |
+| [.NET SDK](https://dotnet.microsoft.com/download) | 10.0 | `dotnet --version`で確認 |
 | [Node.js](https://nodejs.org/) | 20+ | `node --version`で確認（npm同梱） |
 | npm | 10+ | `npm --version`で確認 |
 | [Docker Desktop](https://www.docker.com/products/docker-desktop) | 最新 | Aspire用コンテナ実行環境 |
@@ -74,7 +74,7 @@ QRQueue/
 ### インストール確認
 
 ```bash
-dotnet --version    # 9.0.x
+dotnet --version    # 10.0.x
 node --version      # v20.x.x
 npm --version       # 10.x.x
 docker --version    # Docker version ...
