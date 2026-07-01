@@ -1,43 +1,43 @@
-# Micon Lottery System
+# QRQueue
 
 近畿大学マイコン部が作成した抽選システム
 
 ## 構成
 
-- **Micon.LotterySystem** - ASP.NET Core Web API（バックエンド）
-- **Micon.LotterySystem.Desktop** - Avaloniaデスクトップアプリ（レシート印刷用）
-- **Micon.LotterySystem.Aspire** - .NET Aspire開発環境オーケストレーション
-- **micon.lotterysystem.client** - Svelteフロントエンド
+- **QRQueue** - ASP.NET Core Web API（バックエンド）
+- **QRQueue.Desktop** - Avaloniaデスクトップアプリ（レシート印刷用）
+- **QRQueue.Aspire** - .NET Aspire開発環境オーケストレーション
+- **qrqueue.client** - Svelteフロントエンド
 
 ## ディレクトリ構造
 
 ```
-Micon.LotterySystem/
+QRQueue/
 ├── .github/
 │   └── workflows/
 │       ├── deploy.yml              # Webアプリデプロイ
 │       └── deploy-desktop.yml      # デスクトップアプリデプロイ
 ├── .deploy/
-│   └── miconlottery.service        # systemdサービス定義
-├── Micon.LotterySystem/            # バックエンド
+│   └── qrqueue.service        # systemdサービス定義
+├── QRQueue/            # バックエンド
 │   ├── Controllers/                # APIコントローラー
 │   ├── Models/                     # データモデル
 │   ├── Services/                   # ビジネスロジック
 │   ├── Hubs/                       # SignalRハブ
 │   ├── Migrations/                 # DBマイグレーション
-│   ├── micon.lotterysystem.client/ # フロントエンド (SvelteKit)
+│   ├── qrqueue.client/ # フロントエンド (SvelteKit)
 │   └── appsettings.json
-├── Micon.LotterySystem.Desktop/    # デスクトップアプリ
+├── QRQueue.Desktop/    # デスクトップアプリ
 │   ├── Views/                      # Avaloniaビュー
 │   ├── ViewModels/                 # MVVM ViewModel
 │   ├── Models/                     # データモデル
 │   ├── Services/                   # プリンターサービス等
 │   ├── Setting/                    # 設定クラス
 │   └── appsettings.json
-├── Micon.LotterySystem.Aspire/     # 開発環境オーケストレーション
-│   ├── Micon.LotterySystem.Aspire.AppHost/
-│   └── Micon.LotterySystem.Aspire.ServiceDefaults/
-└── Micon.LotterySystem.sln
+├── QRQueue.Aspire/     # 開発環境オーケストレーション
+│   ├── QRQueue.Aspire.AppHost/
+│   └── QRQueue.Aspire.ServiceDefaults/
+└── QRQueue.sln
 ```
 
 ## 技術スタック
@@ -85,22 +85,22 @@ git --version       # git version ...
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/kindai-micon/Micon.LotterySystem.git
-cd Micon.LotterySystem
+git clone https://github.com/kindai-micon/QRQueue.git
+cd QRQueue
 
 # .NETの依存関係を復元
 dotnet restore
 
 # フロントエンドの依存関係をインストール
-cd Micon.LotterySystem/micon.lotterysystem.client
+cd QRQueue/qrqueue.client
 npm install
 cd ../..
 
 # Aspire AppHostを実行（PostgreSQL含む）
-dotnet run --project Micon.LotterySystem.Aspire/Micon.LotterySystem.Aspire.AppHost
+dotnet run --project QRQueue.Aspire/QRQueue.Aspire.AppHost
 
 # デスクトップアプリも同時に起動する場合
-dotnet run --project Micon.LotterySystem.Aspire/Micon.LotterySystem.Aspire.AppHost -- --desktop
+dotnet run --project QRQueue.Aspire/QRQueue.Aspire.AppHost -- --desktop
 ```
 
 Aspireダッシュボードが自動的に開き、各サービスの状態を確認できます。
@@ -118,14 +118,14 @@ Aspireダッシュボードが自動的に開き、各サービスの状態を�
 
 ```bash
 # デスクトップアプリを実行
-dotnet run --project Micon.LotterySystem.Desktop
+dotnet run --project QRQueue.Desktop
 ```
 
 ## 設定ファイル
 
 ### Webアプリ（appsettings.json）
 
-`Micon.LotterySystem/appsettings.json`:
+`QRQueue/appsettings.json`:
 
 ```json
 {
@@ -134,8 +134,8 @@ dotnet run --project Micon.LotterySystem.Desktop
   },
   "JwtSettings": {
     "SecretKey": "YourSuperSecretKeyForJwtTokenGeneration_Minimum32Characters!",
-    "Issuer": "Micon.LotterySystem",
-    "Audience": "Micon.LotterySystem.Clients",
+    "Issuer": "QRQueue",
+    "Audience": "QRQueue.Clients",
     "AccessTokenExpirationMinutes": 15,
     "RefreshTokenExpirationDays": 30
   },
@@ -159,7 +159,7 @@ dotnet run --project Micon.LotterySystem.Desktop
 
 ### デスクトップアプリ（appsettings.json）
 
-`Micon.LotterySystem.Desktop/appsettings.json`:
+`QRQueue.Desktop/appsettings.json`:
 
 ```json
 {
@@ -187,7 +187,7 @@ dotnet run --project Micon.LotterySystem.Desktop
       "本券は大切に保管してください",
       "抽選時までお持ちください"
     ],
-    "FooterText": "Micon Lottery System"
+    "FooterText": "QRQueue"
   }
 }
 ```
@@ -219,10 +219,10 @@ GRANT ALL PRIVILEGES ON DATABASE my_db TO postgres;
 
 ```bash
 # マイグレーションの作成
-dotnet ef migrations add InitialCreate --project Micon.LotterySystem
+dotnet ef migrations add InitialCreate --project QRQueue
 
 # データベースに適用
-dotnet ef database update --project Micon.LotterySystem
+dotnet ef database update --project QRQueue
 ```
 
 ## 本番環境
@@ -240,7 +240,7 @@ flowchart LR
 - **アプリケーションサーバー**: ASP.NET Core (systemd)
 - **データベース**: PostgreSQL
 - **SSL証明書**: Let's Encrypt (Certbot)
-- **デプロイ先**: `/var/www/miconlottery/publish`
+- **デプロイ先**: `/var/www/qrqueue/publish`
 - **URL**: https://lottery.kindai-micon.club
 
 ### デプロイフロー
@@ -253,16 +253,16 @@ flowchart LR
 
 #### systemdサービス定義
 
-`.deploy/miconlottery.service`:
+`.deploy/qrqueue.service`:
 
 ```ini
 [Unit]
-Description=Micon Lottery System
+Description=QRQueue
 After=network.target
 
 [Service]
-WorkingDirectory=/var/www/miconlottery/publish
-ExecStart=/usr/bin/dotnet /var/www/miconlottery/publish/Micon.LotterySystem.dll
+WorkingDirectory=/var/www/qrqueue/publish
+ExecStart=/usr/bin/dotnet /var/www/qrqueue/publish/QRQueue.dll
 Restart=always
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://*:5000
@@ -275,9 +275,9 @@ WantedBy=multi-user.target
 
 ```bash
 # アプリケーションサービス
-sudo systemctl status miconlottery    # 状態確認
-sudo systemctl restart miconlottery   # 再起動
-sudo journalctl -u miconlottery -f    # ログ確認
+sudo systemctl status qrqueue    # 状態確認
+sudo systemctl restart qrqueue   # 再起動
+sudo journalctl -u qrqueue -f    # ログ確認
 
 # Nginx
 sudo systemctl status nginx           # 状態確認
