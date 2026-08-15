@@ -39,9 +39,6 @@
 		<Content Update="ClientApp\**" CopyToPublishDirectory="Never" />
 	</ItemGroup>
 	<ItemGroup>
-	  <Folder Include="qrqueue.client\src\routes\tickets-enabled\" />
-	</ItemGroup>
-	<ItemGroup>
 	  <None Update="fonts\NotoSansJP.ttf">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>

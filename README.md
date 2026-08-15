@@ -5,7 +5,6 @@
 ## 構成
 
 - **QRQueue** - ASP.NET Core Web API（バックエンド）
-- **QRQueue.Desktop** - Avaloniaデスクトップアプリ（レシート印刷用）
 - **QRQueue.Aspire** - .NET Aspire開発環境オーケストレーション
 - **qrqueue.client** - Svelteフロントエンド
 
@@ -15,8 +14,7 @@
 QRQueue/
 ├── .github/
 │   └── workflows/
-│       ├── deploy.yml              # Webアプリデプロイ
-│       └── deploy-desktop.yml      # デスクトップアプリデプロイ
+│       └── deploy.yml              # Webアプリデプロイ
 ├── .deploy/
 │   └── qrqueue.service        # systemdサービス定義
 ├── QRQueue/            # バックエンド
@@ -26,13 +24,6 @@ QRQueue/
 │   ├── Hubs/                       # SignalRハブ
 │   ├── Migrations/                 # DBマイグレーション
 │   ├── qrqueue.client/ # フロントエンド (SvelteKit)
-│   └── appsettings.json
-├── QRQueue.Desktop/    # デスクトップアプリ
-│   ├── Views/                      # Avaloniaビュー
-│   ├── ViewModels/                 # MVVM ViewModel
-│   ├── Models/                     # データモデル
-│   ├── Services/                   # プリンターサービス等
-│   ├── Setting/                    # 設定クラス
 │   └── appsettings.json
 ├── QRQueue.Aspire/     # 開発環境オーケストレーション
 │   ├── QRQueue.Aspire.AppHost/
@@ -51,10 +42,6 @@ QRQueue/
 ### フロントエンド
 - SvelteKit
 - TypeScript
-
-### デスクトップアプリ
-- .NET 10.0
-- Avalonia UI
 
 ### 開発環境（.NET Aspire）
 - .NET Aspire 9.5
@@ -98,28 +85,9 @@ cd ../..
 
 # Aspire AppHostを実行（PostgreSQL含む）
 dotnet run --project QRQueue.Aspire/QRQueue.Aspire.AppHost
-
-# デスクトップアプリも同時に起動する場合
-dotnet run --project QRQueue.Aspire/QRQueue.Aspire.AppHost -- --desktop
 ```
 
 Aspireダッシュボードが自動的に開き、各サービスの状態を確認できます。
-
-### デスクトップアプリ
-
-抽選券の発行と印刷を行うWindowsデスクトップアプリです。
-
-**主な機能**:
-- ログイン・ログアウト
-- 抽選会一覧の表示・選択
-- 抽選券の発行（指定枚数を一括発行）
-- レシートプリンターへの印刷（QRコード付き）
-- 発行履歴の管理
-
-```bash
-# デスクトップアプリを実行
-dotnet run --project QRQueue.Desktop
-```
 
 ## 設定ファイル
 
@@ -132,13 +100,6 @@ dotnet run --project QRQueue.Desktop
   "ConnectionStrings": {
     "lottery-db": "Host=localhost;Database=lottery;Port=5432;Username=postgres;Password=your_password"
   },
-  "JwtSettings": {
-    "SecretKey": "YourSuperSecretKeyForJwtTokenGeneration_Minimum32Characters!",
-    "Issuer": "QRQueue",
-    "Audience": "QRQueue.Clients",
-    "AccessTokenExpirationMinutes": 15,
-    "RefreshTokenExpirationDays": 30
-  },
   "LotteryBaseUrl": "http://localhost:5000",
   "UseHttpsForQrCode": false,
   "Cors": {
@@ -150,54 +111,9 @@ dotnet run --project QRQueue.Desktop
 | 設定項目 | 説明 |
 |---------|------|
 | `ConnectionStrings:lottery-db` | PostgreSQL接続文字列 |
-| `JwtSettings:SecretKey` | JWT署名用秘密鍵（32文字以上） |
-| `JwtSettings:Issuer` | JWT発行者 |
-| `JwtSettings:Audience` | JWT対象 |
 | `LotteryBaseUrl` | 抽選画面のベースURL |
 | `UseHttpsForQrCode` | QRコードURLでHTTPSを使用するか |
 | `Cors:AllowedOrigins` | CORS許可オリジン |
-
-### デスクトップアプリ（appsettings.json）
-
-`QRQueue.Desktop/appsettings.json`:
-
-```json
-{
-  "Backend": {
-    "Url": "http://localhost:5000"
-  },
-  "Printer": {
-    "PrinterName": "POS-80C",
-    "DocumentName": "抽選券印刷",
-    "CutEnabled": true
-  },
-  "ReceiptLayout": {
-    "PaperWidthPx": 576,
-    "QrSizePx": 220,
-    "MarginLeft": 24,
-    "MarginRight": 24,
-    "MarginTop": 24,
-    "MarginBottom": 24,
-    "TitleFontSize": 28,
-    "NumberFontSize": 42,
-    "BodyFontSize": 22,
-    "FooterFontSize": 18,
-    "Threshold": 160,
-    "WarningLines": [
-      "本券は大切に保管してください",
-      "抽選時までお持ちください"
-    ],
-    "FooterText": "QRQueue"
-  }
-}
-```
-
-| 設定項目 | 説明 |
-|---------|------|
-| `Backend:Url` | バックエンドAPIのURL |
-| `Printer:PrinterName` | プリンター名 |
-| `Printer:CutEnabled` | 自動カット有効/無効 |
-| `ReceiptLayout:*` | レシートレイアウト設定 |
 
 ## データベース構築
 
@@ -292,14 +208,6 @@ sudo certbot renew                    # 証明書更新
 
 ### Webアプリ
 `release`ブランチにマージすると自動的にデプロイされます。
-
-### デスクトップアプリ
-タグをプッシュするとGitHub Releasesに公開されます。
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
 
 ## ライセンス
 
