@@ -48,7 +48,10 @@ namespace QRQueue
             });
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
+            builder.Services.AddSingleton<IQrCodeGenerator, QrCodeGenerator>();
             builder.Services.AddScoped<ITicketIssuanceService, TicketIssuanceService>();
+            builder.Services.AddScoped<IGroupNumberIssuanceService, GroupNumberIssuanceService>();
+            builder.Services.AddScoped<IQueueCallService, QueueCallService>();
             builder.Services.AddSingleton<IVapidService, VapidService>();
             builder.Services.AddSingleton<IPushSubscriptionService, PushSubscriptionService>();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

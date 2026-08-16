@@ -1,17 +1,11 @@
-﻿using ZXing;
-using ZXing.Common;
-using QuestPDF.Fluent;
+﻿using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using QRQueue.Models;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Formats.Png;
 using QuestPDF.Helpers;
-using QRQueue.Services;
 
 namespace QRQueue.Services
 {
-    public class TicketPdfGenerator : ITicketPdfGenerator
+    public class TicketPdfGenerator(IQrCodeGenerator qrCodeGenerator) : ITicketPdfGenerator
     {
     public byte[] GenerateTicketsPdf(List<TicketInfo> tickets)
     {
@@ -82,7 +76,7 @@ namespace QRQueue.Services
                 .FontFamily("Noto Sans JP").FontSize(16).Bold();
 
             row.ConstantItem(100).AlignRight().Height(80)
-                .Image(GenerateQrCode(ticket.Url), ImageScaling.FitHeight);
+                .Image(qrCodeGenerator.GeneratePng(ticket.Url), ImageScaling.FitHeight);
         });
 
         // 説明と注意
@@ -94,30 +88,6 @@ namespace QRQueue.Services
             // Powered by 表記
             bottom.Item().PaddingTop(10).AlignRight().Text("Powered by Micon club").FontSize(6).Italic().FontColor(Colors.Grey.Medium);
         });
-    }
-
-    private byte[] GenerateQrCode(string text)
-    {
-        var writer = new BarcodeWriterPixelData
-        {
-            Format = BarcodeFormat.QR_CODE,
-            Options = new EncodingOptions
-            {
-                Height = 150,
-                Width = 150,
-                Margin = 1
-            }
-        };
-
-        var pixelData = writer.Write(text);
-
-        using var image = SixLabors.ImageSharp.Image.LoadPixelData<Rgba32>(
-            pixelData.Pixels, pixelData.Width, pixelData.Height
-        );
-
-        using var ms = new MemoryStream();
-        image.Save(ms, new PngEncoder());
-        return ms.ToArray();
     }
     }
 }
