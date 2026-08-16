@@ -4,11 +4,9 @@
     import { HubConnectionBuilder, HubConnection, HubConnectionState } from '@microsoft/signalr';
 
     type TicketStatus = {
-        slotName: string | null;
-        merchandise: string | null;
         number: number;
         status: string;
-        lotteryGroupId: string | null;
+        eventId: string | null;
     };
 
     // ページのパラメータが変わったら反応するために$pageを監視
@@ -16,7 +14,7 @@
     let prevTicketId: string | null = null;
 
     let ticketData: TicketStatus | null = null;
-    let lotteryGroupId: string | null = null;
+    let eventId: string | null = null;
 
     let loaded = false;
     let connection: HubConnection | null = null;
@@ -51,19 +49,19 @@
                 return;
             }
 
-            if (connection.state === HubConnectionState.Connected && lotteryGroupId) {
-                await connection.invoke("RemoveLotteryGroup", lotteryGroupId);
+            if (connection.state === HubConnectionState.Connected && eventId) {
+                await connection.invoke("RemoveEvent", eventId);
                 await Load();
-                if (lotteryGroupId) {
-                    await connection.invoke("SetLotteryGroup", lotteryGroupId);
-                    console.log("SetLotteryGroup invoked after URL change");
+                if (eventId) {
+                    await connection.invoke("SetEvent", eventId);
+                    console.log("SetEvent invoked after URL change");
                 }
             } else {
                 console.log("Connection not ready, waiting...");
                 connection.onreconnected = async () => {
-                    if (lotteryGroupId) {
-                        await connection.invoke("RemoveLotteryGroup", lotteryGroupId);
-                        await connection.invoke("SetLotteryGroup", lotteryGroupId);
+                    if (eventId) {
+                        await connection.invoke("RemoveEvent", eventId);
+                        await connection.invoke("SetEvent", eventId);
                         await Load();
                     }
                 };
@@ -81,7 +79,7 @@
             }
 
             connection = new HubConnectionBuilder()
-                .withUrl("/api/LotteryHub")
+                .withUrl("/api/queueHub")
                 .withAutomaticReconnect()
                 .build();
 
@@ -112,8 +110,8 @@
 
             connection.onreconnected = async (connectionId: string) => {
                 console.log("Reconnected with ID:", connectionId);
-                if (lotteryGroupId) {
-                    await connection.invoke("SetLotteryGroup", lotteryGroupId);
+                if (eventId) {
+                    await connection.invoke("SetEvent", eventId);
                     await Load();
                 }
             };
@@ -150,17 +148,17 @@
 
             ticketData = data;
 
-            // lotteryGroupId を取得して、まだグループに参加していなければ参加
-            if (data.lotteryGroupId && data.lotteryGroupId !== lotteryGroupId) {
-                lotteryGroupId = data.lotteryGroupId;
+            // eventId を取得して、まだグループに参加していなければ参加
+            if (data.eventId && data.eventId !== eventId) {
+                eventId = data.eventId;
 
                 // 既に接続している場合は新しいグループに参加
                 if (connection && connection.state === "Connected") {
                     try {
-                        await connection.invoke("SetLotteryGroup", lotteryGroupId);
-                        console.log("Joined lottery group:", lotteryGroupId);
+                        await connection.invoke("SetEvent", eventId);
+                        console.log("Joined event group:", eventId);
                     } catch (err) {
-                        console.error("Error joining lottery group:", err);
+                        console.error("Error joining event group:", err);
                     }
                 }
             }
@@ -483,9 +481,9 @@
 			<p>QRコード読み込み完了</p>
 		</div>
 
-		<!-- チケット番号 -->
+		<!-- 呼び出し番号 -->
 		<div class="ticket-number-box">
-			<div class="ticket-number-label">抽選券番号</div>
+			<div class="ticket-number-label">呼び出し番号</div>
 			<div class="ticket-number">{ticketData.number}</div>
 		</div>
 
@@ -493,72 +491,42 @@
 		<div class="ticket-info">
 			<div class="heading">ステータス</div>
 			<div class="status-badge status-{ticketData.status.toLowerCase()}">
-				{#if ticketData.status === 'Invalid'}
-					未有効化
-				{:else if ticketData.status === 'Valid'}
-					有効
-				{:else if ticketData.status === 'Winner'}
-					当選 🎉
-				{:else if ticketData.status === 'Exchanged'}
-					交換済み ✓
+				{#if ticketData.status === 'Waiting'}
+					呼び出し待ち
+				{:else if ticketData.status === 'Calling'}
+					呼び出し中
+				{:else if ticketData.status === 'Interrupted'}
+					割り込み待ち
+				{:else if ticketData.status === 'Completed'}
+					受付済み ✓
+				{:else if ticketData.status === 'Matching'}
+					マッチング中
+				{:else if ticketData.status === 'Cancelled'}
+					無効
 				{:else}
 					{ticketData.status}
 				{/if}
 			</div>
-
-			{#if ticketData.slotName}
-			<div class="info-row">
-				<span class="info-label">当選景品</span>
-				<div class="info-value">{ticketData.slotName}</div>
-				{#if ticketData.merchandise}
-				<div style="font-size: 0.85rem; color: #999; margin-top: 0.3rem;">
-					{ticketData.merchandise}
-				</div>
-				{/if}
-			</div>
-			{/if}
 		</div>
 
-		<!-- 当選アラート -->
-		{#if ticketData.status === 'Winner'}
-		<div class="alert-box alert-winner">
-			<div style="font-size: 1.3rem; margin-bottom: 0.5rem;">🎉</div>
-			<div>おめでとうございます！</div>
+		<!-- 呼び出し中アラート -->
+		{#if ticketData.status === 'Calling'}
+		<div class="alert-box" style="background-color: #fff3e0; border: 2px solid #ff9800; color: #e65100;">
+			<div style="font-size: 1.3rem; margin-bottom: 0.5rem;">🔔</div>
+			<div>呼び出されました！</div>
 			<div style="font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400;">
-				このチケットは当選しました
+				代表者の方は受付のチェックインQRを読み取ってください
 			</div>
 		</div>
 		{/if}
 
-		<!-- 交換済みアラート -->
-		{#if ticketData.status === 'Exchanged'}
-		<div class="alert-box alert-exchanged">
+		<!-- 受付済みアラート -->
+		{#if ticketData.status === 'Completed'}
+		<div class="alert-box" style="background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32;">
 			<div style="font-size: 1.3rem; margin-bottom: 0.5rem;">✓</div>
-			<div>交換済みです</div>
+			<div>受付完了</div>
 			<div style="font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400;">
-				このチケットはすでに景品と交換されました
-			</div>
-		</div>
-		{/if}
-
-		<!-- 有効なチケット説明 -->
-		{#if ticketData.status === 'Valid' && !ticketData.slotName}
-		<div class="alert-box" style="background-color: #e3f2fd; border: 2px solid #2196f3; color: #1565c0;">
-			<div style="font-size: 1.3rem; margin-bottom: 0.5rem;">📋</div>
-			<div>現在参加中</div>
-			<div style="font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400;">
-				このチケットは抽選に参加中です
-			</div>
-		</div>
-		{/if}
-
-		<!-- 無効なチケット説明 -->
-		{#if ticketData.status === 'Invalid'}
-		<div class="alert-box" style="background-color: #f5f5f5; border: 2px solid #999; color: #666;">
-			<div style="font-size: 1.3rem; margin-bottom: 0.5rem;">⏳</div>
-			<div>未有効化</div>
-			<div style="font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400;">
-				このチケットはまだ有効化されていません
+				受付が完了しました
 			</div>
 		</div>
 		{/if}

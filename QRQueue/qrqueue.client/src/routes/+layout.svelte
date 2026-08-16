@@ -13,7 +13,7 @@
     const menuItems = [
         { name: 'ユーザー管理', href: '/users' },
         { name: 'ロール管理', href: '/roles' },
-        { name: '抽選会管理', href: '/lottery' },
+        { name: 'イベント管理', href: '/event' },
 
 
     ];
@@ -180,7 +180,7 @@
 
             <button class="menu-button" onclick={toggleDrawer}>☰</button>
             {/if}
-            <div class="title">抽選管理システム</div>
+            <div class="title">QRQueue 管理システム</div>
         </div>
     </header>
     <!-- モバイル用サイドメニュー -->

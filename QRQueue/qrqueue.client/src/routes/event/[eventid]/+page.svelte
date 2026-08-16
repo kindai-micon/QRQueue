@@ -2,17 +2,17 @@
     import { page } from '$app/stores';
     import { derived } from 'svelte/store';
     import { onMount } from 'svelte';
-    // URLパラメータから抽選会名を取得
-    const lotteryId = $page.params.lotteryid;
+    // URLパラメータからイベント名を取得
+    const eventId = $page.params.eventid;
 
-    let lotteryName = "";
+    let eventName = "";
     onMount(async () => {
-        let res = await fetch(`/api/LotteryGroup/Name?id=${lotteryId}`);
+        let res = await fetch(`/api/event/Name?id=${eventId}`);
         console.log(res);
 
-        lotteryName = await res.text();
+        eventName = await res.text();
 
-        console.log(lotteryName);
+        console.log(eventName);
 
     });
 </script>
@@ -66,18 +66,18 @@
 
 <div class="container">
     <div class="title">
-        抽選会: {lotteryName}
+        イベント: {eventName}
     </div>
 
     <div class="nav">
-        <a class="link-card" href="{lotteryId}/publishing">
-            抽選券の発行
-            <div class="desc">抽選券を発行できます</div>
+        <a class="link-card" href="{eventId}/publishing">
+            チケットの発行
+            <div class="desc">チケットを発行できます</div>
         </a>
 
-        <a class="link-card" href="{lotteryId}/tickets">
-            抽選券一覧
-            <div class="desc">発行済みの抽選券の一覧を確認できます</div>
+        <a class="link-card" href="{eventId}/tickets">
+            チケット一覧
+            <div class="desc">発行済みのチケットの一覧を確認できます</div>
         </a>
     </div>
 </div>

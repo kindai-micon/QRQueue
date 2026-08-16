@@ -3,7 +3,7 @@
     import { page } from '$app/stores';
     import { get } from 'svelte/store';
 
-    const lotteryId = get(page).params.lotteryid;
+    const eventId = get(page).params.eventid;
 
     type Ticket = {
         id: string;
@@ -58,7 +58,7 @@
     onMount(async () => {
         loading = true;
         try {
-            const res = await fetch(`/api/ticket/list?lotteryGroupDisplayId=${lotteryId}`);
+            const res = await fetch(`/api/ticket/list?eventDisplayId=${eventId}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             tickets = await res.json();
             filteredTickets = tickets;
@@ -151,7 +151,7 @@
 </style>
 
 <div class="container">
-    <h1>発行済み抽選券一覧</h1>
+    <h1>発行済みチケット一覧</h1>
 
     {#if loading}
     <p class="loading">読み込み中...</p>

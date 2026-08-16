@@ -2,8 +2,8 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 
-	const lotteryId = $page.params.lotteryid;
-	let lotteryName = "";
+	const eventId = $page.params.eventid;
+	let eventName = "";
 	let issueCount = 10;
 	let totalIssued = 0;
 
@@ -20,11 +20,11 @@
 	let logs: LogEntry[] = [];
 
 	onMount(async () => {
-	let res = await fetch(`/api/LotteryGroup/Name?id=${lotteryId}`);
-	lotteryName = await res.text();
+	let res = await fetch(`/api/event/Name?id=${eventId}`);
+	eventName = await res.text();
 
-	// ログ情報をAPIから取得（クエリに lotteryId を付ける）
-	const logRes = await fetch(`/api/pdf/logs?lotteryGroupId=${lotteryId}`);
+	// ログ情報をAPIから取得（クエリに eventId を付ける）
+	const logRes = await fetch(`/api/pdf/logs?eventDisplayId=${eventId}`);
 	if (logRes.ok) {
 	const data = await logRes.json();
 
@@ -53,7 +53,7 @@
 	},
 	body: JSON.stringify({
 	count: issueCount,
-	lotteryGroupId: lotteryId
+	eventDisplayId: eventId
 	})
 	});
 
@@ -66,7 +66,7 @@
 	const url = window.URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
-	a.download = '抽選券.pdf';
+	a.download = 'チケット.pdf';
 	document.body.appendChild(a);
 	a.click();
 	document.body.removeChild(a);
@@ -82,7 +82,7 @@
 	}
 
 	async function refreshLogs() {
-	const logRes = await fetch(`/api/pdf/logs?lotteryGroupId=${lotteryId}`);
+	const logRes = await fetch(`/api/pdf/logs?eventDisplayId=${eventId}`);
 	if (logRes.ok) {
 	const data = await logRes.json();
 
@@ -168,7 +168,7 @@
 </style>
 
 <div class="container">
-	<div class="title">抽選会: {lotteryName}</div>
+	<div class="title">イベント: {eventName}</div>
 
 	<div class="section">
 		<div class="label">発行枚数を入力：</div>
@@ -177,7 +177,7 @@
 			{#if isGenerating}
 			発行中...
 			{:else}
-			抽選券を発行
+			チケットを発行
 			{/if}
 		</button>
 	</div>
@@ -191,7 +191,7 @@
 					<th>発行者</th>
 					<th>発行日時</th>
 					<th>枚数</th>
-					<th>抽選番号範囲</th>
+					<th>番号範囲</th>
 				</tr>
 			</thead>
 			<tbody>
