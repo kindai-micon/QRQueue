@@ -43,6 +43,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
     return (
         <div>
             <link rel="stylesheet" href="/css/layout.css" />
+            <link rel="stylesheet" href="/css/site.css" />
             <div class="app-container">
                 <header class="layout-header">
                     <div class="header-left">

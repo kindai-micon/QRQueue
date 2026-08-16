@@ -77,7 +77,7 @@ export default function Tickets({ model }: { model: Model }) {
                         {filteredTickets.length === 0 ? (
                             <p>該当するチケットは見つかりませんでした。</p>
                         ) : (
-                            <table class="tickets-table">
+                            <table class="data-table">
                                 <thead>
                                     <tr>
                                         <th>番号</th>

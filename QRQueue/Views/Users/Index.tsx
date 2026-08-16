@@ -121,18 +121,18 @@ export default function Index() {
                         <p>「{targetUserToDelete}」を削除してもよろしいですか？</p>
                         {modalError && <p class="modal-error">{modalError}</p>}
                         <div class="modal-buttons">
-                            <button class="delete-button" onClick={executeDelete}>削除する</button>
-                            <button onClick={closeModal}>キャンセル</button>
+                            <button class="btn-danger" onClick={executeDelete}>削除する</button>
+                            <button class="btn-secondary btn-sm" onClick={closeModal}>キャンセル</button>
                         </div>
                     </div>
                 </div>
             )}
 
             <div class="container">
-                <div class="title">ユーザー一覧</div>
+                <div class="page-title">ユーザー一覧</div>
                 <div class="register-container">
                     <h2>新規ユーザー追加</h2>
-                    {registerError && <p class="error-message">{registerError}</p>}
+                    {registerError && <p class="error">{registerError}</p>}
                     <form onSubmit={registerUser}>
                         <div class="form-group">
                             <label for="newUserName">ユーザー名</label>
@@ -148,7 +148,7 @@ export default function Index() {
                                     value={newPassword}
                                     onInput={(e) => setNewPassword(e.currentTarget.value)}
                                 />
-                                <button type="button" class="toggle-text" onClick={() => setShowPassword(!showPassword)}>
+                                <button type="button" class="password-toggle" onClick={() => setShowPassword(!showPassword)}>
                                     {showPassword ? "非表示" : "表示"}
                                 </button>
                             </div>
@@ -159,11 +159,11 @@ export default function Index() {
                                 onInput={(e) => setNewEmail(e.currentTarget.value)} />
                         </div>
                         {errorMessages.length > 0 && (
-                            <ul class="error-message">
+                            <ul class="error">
                                 {errorMessages.map((msg, i) => <li key={i}>{msg}</li>)}
                             </ul>
                         )}
-                        <button type="submit">登録</button>
+                        <button type="submit" class="btn-primary">登録</button>
                     </form>
                 </div>
 
@@ -182,7 +182,7 @@ export default function Index() {
                                         ロール: {user.roles.map((r) => r.name).join(", ")}
                                     </div>
                                 </div>
-                                <button class="delete-button" onClick={() => confirmDelete(user.userName)}>削除</button>
+                                <button class="btn-danger btn-sm" onClick={() => confirmDelete(user.userName)}>削除</button>
                             </li>
                         ))}
                     </ul>

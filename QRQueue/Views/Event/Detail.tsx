@@ -20,7 +20,7 @@ export default function Detail({ model }: { model: Model }) {
         <Layout>
             <link rel="stylesheet" href="/css/event-detail.css" />
             <div class="detail-container">
-                <div class="title">イベント: {eventName}</div>
+                <div class="page-title">イベント: {eventName}</div>
 
                 <div class="nav">
                     <a class="link-card" href={`/event/${model.eventId}/publishing`}>

@@ -91,7 +91,7 @@ export default function Index() {
                         value={newRoleName}
                         onInput={(e) => setNewRoleName(e.currentTarget.value)}
                     />
-                    <button class="add-role-button" type="submit" disabled={!newRoleName.trim()}>追加</button>
+                    <button class="btn-primary" type="submit" disabled={!newRoleName.trim()}>追加</button>
                 </form>
 
                 {roles.map((role) => (
@@ -99,7 +99,7 @@ export default function Index() {
                         <div class="role-header">
                             {role.name}
                             {role.name !== "Admin" && (
-                                <button class="delete-button" onClick={() => deleteRole(role.name)}>削除</button>
+                                <button class="btn-danger btn-sm" onClick={() => deleteRole(role.name)}>削除</button>
                             )}
                         </div>
 

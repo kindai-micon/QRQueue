@@ -69,7 +69,7 @@ export default function Index() {
                         onInput={(e) => setNewName(e.currentTarget.value)}
                         disabled={creating}
                     />
-                    <button type="submit" disabled={creating}>
+                    <button type="submit" class="btn-primary" disabled={creating}>
                         {creating ? "作成中..." : "作成"}
                     </button>
                 </form>

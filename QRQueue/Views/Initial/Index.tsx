@@ -72,33 +72,33 @@ export default function Index() {
             <div class="form-container">
                 <h1>初期ユーザー作成</h1>
                 <form onSubmit={handleSubmit}>
-                    <div>
+                    <div class="form-group">
                         <label for="passcode" class="required-mark">作成用パスコード</label>
                         <input id="passcode" type="text" value={passcode}
                             onInput={(e) => setPasscode(e.currentTarget.value)} />
                     </div>
-                    <div>
+                    <div class="form-group">
                         <label for="username" class="required-mark">ユーザー名</label>
                         <input id="username" type="text" value={username}
                             onInput={(e) => setUsername(e.currentTarget.value)} />
                     </div>
-                    <div>
+                    <div class="form-group">
                         <label for="email">メールアドレス(任意)</label>
                         <input id="email" type="text" value={email}
                             onInput={(e) => setEmail(e.currentTarget.value)} />
                     </div>
-                    <div>
+                    <div class="form-group">
                         <label for="password" class="required-mark">パスワード</label>
                         <input id="password" type="password" value={password}
                             onInput={(e) => setPassword(e.currentTarget.value)} />
                     </div>
-                    <div>
+                    <div class="form-group">
                         <label for="confirmPassword" class="required-mark">パスワードの確認</label>
                         <input id="confirmPassword" type="password" value={confirmPassword}
                             onInput={(e) => setConfirmPassword(e.currentTarget.value)} />
                     </div>
                     {error && <div class="error">{error}</div>}
-                    <button type="submit">作成する</button>
+                    <button type="submit" class="btn-primary btn-block">作成する</button>
                 </form>
             </div>
         </Layout>

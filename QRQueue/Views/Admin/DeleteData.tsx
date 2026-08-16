@@ -57,7 +57,7 @@ export default function DeleteData() {
         <Layout>
             <link rel="stylesheet" href="/css/admin-delete-data.css" />
             <div class="delete-container">
-                <div class="title">⚠️ すべてのデータを削除</div>
+                <div class="page-title">⚠️ すべてのデータを削除</div>
 
                 {deleteSuccess ? (
                     <div class="success">
@@ -100,7 +100,7 @@ export default function DeleteData() {
                                     />
                                     <button
                                         type="button"
-                                        class="toggle-password"
+                                        class="password-toggle"
                                         onClick={() => setShowPassword(!showPassword)}
                                         disabled={isDeleting}
                                     >
@@ -110,10 +110,10 @@ export default function DeleteData() {
                             </div>
 
                             <div class="button-group">
-                                <button type="button" class="cancel-button" onClick={handleCancel} disabled={isDeleting}>
+                                <button type="button" class="btn-secondary" onClick={handleCancel} disabled={isDeleting}>
                                     キャンセル
                                 </button>
-                                <button type="submit" class="delete-button" disabled={isDeleting || !password}>
+                                <button type="submit" class="btn-danger" disabled={isDeleting || !password}>
                                     {isDeleting ? (
                                         <span class="loading-text">
                                             <span class="loading"></span>

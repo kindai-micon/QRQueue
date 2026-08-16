@@ -92,7 +92,7 @@ export default function Publishing({ model }: { model: Model }) {
         <Layout>
             <link rel="stylesheet" href="/css/event-publishing.css" />
             <div class="publishing-container">
-                <div class="title">イベント: {eventName}</div>
+                <div class="page-title">イベント: {eventName}</div>
 
                 <form class="section issue-form" onSubmit={generateTickets}>
                     <div class="label">発行枚数を入力：</div>
@@ -102,7 +102,7 @@ export default function Publishing({ model }: { model: Model }) {
                         value={issueCount}
                         onInput={(e) => setIssueCount(Number(e.currentTarget.value))}
                     />
-                    <button type="submit" disabled={isGenerating}>
+                    <button type="submit" class="btn-primary" disabled={isGenerating}>
                         {isGenerating ? "発行中..." : "チケットを発行"}
                     </button>
                 </form>
@@ -110,7 +110,7 @@ export default function Publishing({ model }: { model: Model }) {
                 <div class="section">
                     <div class="label">合計発行枚数: {totalIssued}</div>
                     <div class="label">発行ログ:</div>
-                    <table class="log-table">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>発行者</th>

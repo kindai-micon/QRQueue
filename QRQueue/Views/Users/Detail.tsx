@@ -108,8 +108,8 @@ export default function Detail({ model }: { model: Model }) {
                             ロール「<strong>{roleToRemove.name}</strong>」を削除してもよろしいですか？
                         </div>
                         <div class="modal-buttons">
-                            <button class="modal-button confirm" onClick={removeConfirmedRole}>削除</button>
-                            <button class="modal-button cancel" onClick={() => { setShowModal(false); setRoleToRemove(null); }}>キャンセル</button>
+                            <button class="btn-danger btn-sm" onClick={removeConfirmedRole}>削除</button>
+                            <button class="btn-secondary btn-sm" onClick={() => { setShowModal(false); setRoleToRemove(null); }}>キャンセル</button>
                         </div>
                     </div>
                 </div>
@@ -148,7 +148,7 @@ export default function Detail({ model }: { model: Model }) {
                                                 ))}
                                             </ul>
                                         </div>
-                                        <button class="remove-button" onClick={() => { setRoleToRemove(role); setShowModal(true); }}>削除</button>
+                                        <button class="btn-danger btn-sm" onClick={() => { setRoleToRemove(role); setShowModal(true); }}>削除</button>
                                     </div>
                                 ))
                             )}
@@ -167,8 +167,8 @@ export default function Detail({ model }: { model: Model }) {
                                     </select>
                                     <button
                                         type="submit"
+                                        class="btn-primary btn-sm"
                                         disabled={!newRoleName}
-                                        style={{ padding: "6px 12px", backgroundColor: "#2ecc71", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
                                     >
                                         ロール追加
                                     </button>

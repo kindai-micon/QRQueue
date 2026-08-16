@@ -49,7 +49,7 @@ export default function Index() {
             <link rel="stylesheet" href="/css/login.css" />
             <div class="login-container">
                 <h2>ログイン</h2>
-                {errorMessage && <p class="error-message">{errorMessage}</p>}
+                {errorMessage && <p class="error">{errorMessage}</p>}
                 <form onSubmit={handleSubmit}>
                     <div class="form-group">
                         <label for="username">ユーザー名</label>
@@ -69,7 +69,7 @@ export default function Index() {
                             onInput={(e) => setPassword(e.currentTarget.value)}
                         />
                     </div>
-                    <button type="submit" disabled={isLoading}>
+                    <button type="submit" class="btn-primary" disabled={isLoading}>
                         {isLoading ? "ログイン中..." : "ログイン"}
                     </button>
                 </form>
