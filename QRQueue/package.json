@@ -2,7 +2,9 @@
   "name": "qrqueue",
   "version": "1.0.0",
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@microsoft/signalr": "^8.0.7"
+  },
   "devDependencies": {
     "typescript": "^7",
     "esbuild": "^0.28.2"

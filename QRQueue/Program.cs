@@ -161,12 +161,17 @@ namespace QRQueue
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
             app.MapGet("/jsx", () => Results.Extensions.Jsx("Home/Index", new { name = "QRQueue" }, RenderMode.Server));
+            // SvelteKit から移行した View(スパイク)
+            app.MapGet("/views/login", () => Results.Extensions.Jsx("Login/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/views/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/views/ticket/{ticketId}", (string ticketId) => Results.Extensions.Jsx("Ticket/Index", new { ticketId }, RenderMode.ServerAndClient));
             app.Use(async (context, next) =>
             {
                 // /api で始まるリクエストはそのまま処理を継続
                 if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
                     && !context.Request.Path.StartsWithSegments("/account", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/jsx", StringComparison.OrdinalIgnoreCase))
+                    && !context.Request.Path.StartsWithSegments("/jsx", StringComparison.OrdinalIgnoreCase)
+                    && !context.Request.Path.StartsWithSegments("/views", StringComparison.OrdinalIgnoreCase))
                 {
                     // index.html の内容を読み込む
                     var indexPath = Path.Combine(app.Environment.WebRootPath, "index.html");
