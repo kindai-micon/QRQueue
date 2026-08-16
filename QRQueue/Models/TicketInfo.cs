@@ -16,9 +16,6 @@ namespace QRQueue.Models
         public Guid Guid { get; set; }
 
         [NotMapped]
-        public const string BaseUrl = $"https://lottery.kindai-micon.culb/ticket/";
-
-        [NotMapped]
         public string Url { get; set; }
     }
 }

@@ -6,8 +6,8 @@ namespace QRQueue
 {
     public class ApplicationDbContext:IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
     {
-        public DbSet<LotteryGroup> LotteryGroups { get; set; }
-        public DbSet<LotterySlots> LotterySlots { get; set; }
+        public DbSet<Event> Events { get; set; }
+        public DbSet<ParticipationGroup> ParticipationGroups { get; set; }
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<Authority> Authorities { get; set; }
         public DbSet<IssueLog> IssueLogs { get; set; }

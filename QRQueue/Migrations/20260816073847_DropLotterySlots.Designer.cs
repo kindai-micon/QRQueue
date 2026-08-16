@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QRQueue;
@@ -11,9 +12,11 @@ using QRQueue;
 namespace QRQueue.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260816073847_DropLotterySlots")]
+    partial class DropLotterySlots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -247,41 +250,6 @@ namespace QRQueue.Migrations
                     b.ToTable("Authorities");
                 });
 
-            modelBuilder.Entity("QRQueue.Models.Event", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AutoGroupSize")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("Created")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DisplayId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TicketInfoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("Updated")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TicketInfoId");
-
-                    b.ToTable("Events");
-                });
-
             modelBuilder.Entity("QRQueue.Models.IssueLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -297,15 +265,15 @@ namespace QRQueue.Migrations
                     b.Property<long>("EndNumber")
                         .HasColumnType("bigint");
 
-                    b.Property<Guid>("EventDisplayId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("IssuerName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid>("LotteryGroupDisplayId")
+                        .HasColumnType("uuid");
 
                     b.Property<long>("StartNumber")
                         .HasColumnType("bigint");
@@ -318,17 +286,11 @@ namespace QRQueue.Migrations
                     b.ToTable("IssueLogs");
                 });
 
-            modelBuilder.Entity("QRQueue.Models.ParticipationGroup", b =>
+            modelBuilder.Entity("QRQueue.Models.LotteryGroup", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<int>("CallCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("CalledAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("Created")
                         .HasColumnType("timestamp with time zone");
@@ -336,29 +298,21 @@ namespace QRQueue.Migrations
                     b.Property<Guid>("DisplayId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("EventId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("JoinToken")
+                    b.Property<string>("Name")
+                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long>("Number")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("TicketInfoId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("Updated")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EventId");
+                    b.HasIndex("TicketInfoId");
 
-                    b.ToTable("ParticipationGroups");
+                    b.ToTable("LotteryGroups");
                 });
 
             modelBuilder.Entity("QRQueue.Models.PushSubscription", b =>
@@ -437,14 +391,11 @@ namespace QRQueue.Migrations
                     b.Property<Guid>("DisplayId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("LotteryGroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("Number")
                         .HasColumnType("bigint");
-
-                    b.Property<Guid?>("ParticipantToken")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ParticipationGroupId")
-                        .HasColumnType("uuid");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -454,7 +405,7 @@ namespace QRQueue.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ParticipationGroupId");
+                    b.HasIndex("LotteryGroupId");
 
                     b.ToTable("Tickets");
                 });
@@ -550,7 +501,7 @@ namespace QRQueue.Migrations
                     b.Navigation("Role");
                 });
 
-            modelBuilder.Entity("QRQueue.Models.Event", b =>
+            modelBuilder.Entity("QRQueue.Models.LotteryGroup", b =>
                 {
                     b.HasOne("QRQueue.Models.TicketInfo", "TicketInfo")
                         .WithMany()
@@ -559,17 +510,6 @@ namespace QRQueue.Migrations
                         .IsRequired();
 
                     b.Navigation("TicketInfo");
-                });
-
-            modelBuilder.Entity("QRQueue.Models.ParticipationGroup", b =>
-                {
-                    b.HasOne("QRQueue.Models.Event", "Event")
-                        .WithMany("Groups")
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("QRQueue.Models.RefreshToken", b =>
@@ -585,11 +525,13 @@ namespace QRQueue.Migrations
 
             modelBuilder.Entity("QRQueue.Models.Ticket", b =>
                 {
-                    b.HasOne("QRQueue.Models.ParticipationGroup", "ParticipationGroup")
+                    b.HasOne("QRQueue.Models.LotteryGroup", "LotteryGroup")
                         .WithMany("Tickets")
-                        .HasForeignKey("ParticipationGroupId");
+                        .HasForeignKey("LotteryGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Navigation("ParticipationGroup");
+                    b.Navigation("LotteryGroup");
                 });
 
             modelBuilder.Entity("QRQueue.Models.ApplicationRole", b =>
@@ -602,12 +544,7 @@ namespace QRQueue.Migrations
                     b.Navigation("RefreshTokens");
                 });
 
-            modelBuilder.Entity("QRQueue.Models.Event", b =>
-                {
-                    b.Navigation("Groups");
-                });
-
-            modelBuilder.Entity("QRQueue.Models.ParticipationGroup", b =>
+            modelBuilder.Entity("QRQueue.Models.LotteryGroup", b =>
                 {
                     b.Navigation("Tickets");
                 });

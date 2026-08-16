@@ -13,18 +13,17 @@
     const menuItems = [
         { name: 'ユーザー管理', href: '/users' },
         { name: 'ロール管理', href: '/roles' },
-        { name: '抽選会管理', href: '/lottery' },
+        { name: 'イベント管理', href: '/event' },
 
 
     ];
     const unsubscribe = user.subscribe(value => {
         currentUser = value;
     });
-    const isLotteryViewPath = window.location.pathname.match(/\/lottery\/[^\/]+\/view/);
 
     console.log(currentUser);
     onMount(async () => {
-        if (!window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/initial")&&!window.location.pathname.startsWith("/live") && !window.location.pathname.startsWith("/ticket")&& !isLotteryViewPath) {
+        if (!window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/initial") && !window.location.pathname.startsWith("/ticket")) {
 
 	await loadUser();
 	console.log(currentUser);
@@ -181,7 +180,7 @@
 
             <button class="menu-button" onclick={toggleDrawer}>☰</button>
             {/if}
-            <div class="title">抽選管理システム</div>
+            <div class="title">QRQueue 管理システム</div>
         </div>
     </header>
     <!-- モバイル用サイドメニュー -->

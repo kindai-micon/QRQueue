@@ -47,21 +47,21 @@ public class TicketPdfController : ControllerBase
         if (user == null)
             return Unauthorized();
 
-        var lotteryGroup = _db.LotteryGroups
+        var lotteryGroup = _db.Events
             .Include(g => g.TicketInfo)
-            .FirstOrDefault(g => g.DisplayId == request.LotteryGroupId);
+            .FirstOrDefault(g => g.DisplayId == request.EventDisplayId);
 
         if (lotteryGroup == null || lotteryGroup.TicketInfo == null)
-            return BadRequest("無効な抽選会IDまたはチケット情報が未設定です");
+            return BadRequest("無効なイベントIDまたはチケット情報が未設定です");
 
         TicketIssuanceResult result;
         try
         {
             // チケット発行サービスを使用
             result = await _ticketIssuanceService.IssueTicketsAsync(
-                request.LotteryGroupId,
+                request.EventDisplayId,
                 request.Count,
-                TicketStatus.Invalid,
+                TicketStatus.Registered,
                 user.UserName ?? "Unknown");
         }
         catch (InvalidOperationException ex)
@@ -128,7 +128,7 @@ public class TicketPdfController : ControllerBase
         {
             TicketNumber = (int)t.Number,
             Guid = t.DisplayId,
-            Name = lotteryGroup.Name + " 抽選券",
+            Name = lotteryGroup.Name + " チケット",
             Description = lotteryGroup.Name,
             Warning = "当日のみ有効 本券は汚したり破らないよう大切に保管してください",
             Url = baseUrl + t.DisplayId.ToString()
@@ -136,20 +136,20 @@ public class TicketPdfController : ControllerBase
 
         var bytes = _pdfGenerator.GenerateTicketsPdf(ticketInfo);
 
-        return File(bytes, "application/pdf", "抽選券.pdf");
+        return File(bytes, "application/pdf", "チケット.pdf");
     }
 
     public class TicketRequest
     {
         public int Count { get; set; }
-        public Guid LotteryGroupId { get; set; }
+        public Guid EventDisplayId { get; set; }
     }
     [Authorize]
     [HttpGet("logs")]
-    public IActionResult GetLogs([FromQuery] Guid lotteryGroupId)
+    public IActionResult GetLogs([FromQuery] Guid eventDisplayId)
     {
         var logs = _db.IssueLogs
-            .Where(log => log.LotteryGroupDisplayId == lotteryGroupId)
+            .Where(log => log.EventDisplayId == eventDisplayId)
             .OrderByDescending(log => log.IssuedAt)
             .ToList();
 

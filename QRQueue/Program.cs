@@ -15,9 +15,6 @@ using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 namespace QRQueue
 {
     public class Program
@@ -43,7 +40,6 @@ namespace QRQueue
             });
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
-            builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<ITicketIssuanceService, TicketIssuanceService>();
             builder.Services.AddSingleton<IVapidService, VapidService>();
             builder.Services.AddSingleton<IPushSubscriptionService, PushSubscriptionService>();
@@ -114,23 +110,6 @@ namespace QRQueue
             })
             .AddIdentityCookies();
 
-            builder.Services.AddAuthentication()
-            .AddJwtBearer(options =>
-            {
-                var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtSettings["Issuer"],
-                    ValidAudience = jwtSettings["Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured")))
-                };
-            });
-
             builder.Services.AddIdentityCore<ApplicationUser>(o =>
             {
                 o.Stores.MaxLengthForKeys = 128;
@@ -173,7 +152,7 @@ namespace QRQueue
             app.UseAuthorization();
 
             app.MapControllers();
-            app.MapHub<LotteryHub>("/api/lotteryHub");
+            app.MapHub<QueueHub>("/api/queueHub");
             app.Use(async (context, next) =>
             {
                 // /api で始まるリクエストはそのまま処理を継続
