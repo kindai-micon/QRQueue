@@ -56,7 +56,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
                     display: none; font-size: 1.5rem; background: none; border: none;
                     color: white; cursor: pointer; margin-right: 1rem;
                 }
-                .title { font-size: 1.2rem; font-weight: bold; }
+                .layout-title { font-size: 1.2rem; font-weight: bold; }
                 .layout-body { display: flex; flex: 1; height: 100%; }
                 .sidebar {
                     width: 240px; background-color: #f4f4f4; padding: 1rem;
@@ -89,7 +89,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
                         {chrome === "full" && (
                             <button class="menu-button" onClick={() => setDrawerOpen(!drawerOpen)}>☰</button>
                         )}
-                        <div class="title">QRQueue 管理システム</div>
+                        <div class="layout-title">QRQueue 管理システム</div>
                     </div>
                 </header>
                 {drawerOpen && (

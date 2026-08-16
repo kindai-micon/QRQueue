@@ -36,7 +36,10 @@ namespace QRQueue
             var builder = WebApplication.CreateBuilder(args);
 
             // JsxCore: TSX/JSX ビューエンジン(Node.js 不要)
-            builder.AddJsxCore();
+            builder.AddJsxCore(options =>
+            {
+                options.Document.Language = "ja";
+            });
 
             // Add services to the container.
 
