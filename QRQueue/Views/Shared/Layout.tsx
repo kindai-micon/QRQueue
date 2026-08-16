@@ -106,9 +106,7 @@ export default function Layout({ children }: { children?: ComponentChildren }) {
                             ))}
                         </nav>
                     </aside>
-                    <main class="main">
-                        {checked ? (userName !== null ? children : <p>ログイン画面へ移動中...</p>) : <p>読み込み中...</p>}
-                    </main>
+                    <main class="main">{children}</main>
                 </div>
             </div>
         </div>
