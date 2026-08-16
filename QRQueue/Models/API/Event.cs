@@ -1,8 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-
 namespace QRQueue.Models.API
 {
-    public class LotteryGroup
+    public class Event
     {
         public string Name { get; set; }
         public Guid TicketInfoId { get; set; }

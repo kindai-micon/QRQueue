@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace QRQueue.Models
 {
@@ -10,7 +10,7 @@ namespace QRQueue.Models
         public int Count { get; set; }
         public long StartNumber { get; set; }
         public long EndNumber { get; set; }
-        // 抽選会ID（DisplayId）でログを紐づけ
-        public Guid LotteryGroupDisplayId { get; set; }
+        // イベントID(DisplayId)でログを紐づけ
+        public Guid EventDisplayId { get; set; }
     }
 }
