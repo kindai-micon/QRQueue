@@ -55,64 +55,7 @@ export default function DeleteData() {
 
     return (
         <Layout>
-            <style>{`
-                .delete-container { max-width: 600px; margin: 40px auto; padding: 20px; }
-                .title { font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; color: #333; }
-                .warning-box {
-                    background-color: #ffe6e6; border: 2px solid #dc3545;
-                    border-radius: 8px; padding: 20px; margin-bottom: 30px;
-                }
-                .warning-icon { font-size: 2rem; margin-bottom: 10px; }
-                .warning-text { color: #721c24; font-weight: bold; margin-bottom: 10px; }
-                .warning-description { color: #721c24; font-size: 0.95rem; line-height: 1.6; }
-                .warning-description ul { margin: 10px 0; padding-left: 20px; }
-                .warning-description li { margin: 5px 0; }
-                .form-group { margin-bottom: 20px; }
-                .form-group label { display: block; font-weight: bold; margin-bottom: 8px; color: #333; }
-                .password-input { position: relative; }
-                .form-group input {
-                    width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;
-                    font-size: 1rem; box-sizing: border-box;
-                }
-                .form-group input:focus {
-                    outline: none; border-color: #007bff; box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-                }
-                .toggle-password {
-                    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-                    background: none; border: none; color: #007bff; cursor: pointer;
-                    font-weight: bold; font-size: 0.9rem;
-                }
-                .error {
-                    color: #dc3545; background-color: #f8d7da; border: 1px solid #f5c6cb;
-                    padding: 12px; border-radius: 4px; margin-bottom: 20px; font-weight: bold;
-                }
-                .success {
-                    color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb;
-                    padding: 12px; border-radius: 4px; margin-bottom: 20px;
-                    font-weight: bold; text-align: center;
-                }
-                .button-group { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; }
-                .form-group button {
-                    padding: 10px 20px; border: none; border-radius: 4px;
-                    font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease;
-                }
-                .delete-button { background-color: #dc3545; color: white; flex: 1; }
-                .delete-button:hover:not(:disabled) { background-color: #c82333; }
-                .delete-button:disabled { background-color: #ccc; cursor: not-allowed; }
-                .cancel-button { background-color: #6c757d; color: white; }
-                .cancel-button:hover:not(:disabled) { background-color: #5a6268; }
-                .loading {
-                    display: inline-block; width: 20px; height: 20px;
-                    border: 3px solid #f3f3f3; border-top: 3px solid #007bff;
-                    border-radius: 50%; animation: spin 1s linear infinite;
-                    margin-right: 10px; vertical-align: middle;
-                }
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                .loading-text { display: flex; align-items: center; justify-content: center; gap: 10px; }
-            `}</style>
+            <link rel="stylesheet" href="/css/admin-delete-data.css" />
             <div class="delete-container">
                 <div class="title">⚠️ すべてのデータを削除</div>
 
@@ -188,3 +131,4 @@ export default function DeleteData() {
         </Layout>
     );
 }
+

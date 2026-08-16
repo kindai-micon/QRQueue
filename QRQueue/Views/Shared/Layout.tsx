@@ -42,47 +42,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
 
     return (
         <div>
-            <style>{`
-                * { box-sizing: border-box; }
-                body { margin: 0; font-family: sans-serif; }
-                .app-container { display: flex; flex-direction: column; min-height: 100vh; }
-                .layout-header {
-                    display: flex; align-items: center; justify-content: space-between;
-                    background-color: #3f51b5; color: white; padding: 0.75rem 1rem;
-                    position: sticky; top: 0; z-index: 100;
-                }
-                .header-left { display: flex; align-items: center; }
-                .menu-button {
-                    display: none; font-size: 1.5rem; background: none; border: none;
-                    color: white; cursor: pointer; margin-right: 1rem;
-                }
-                .layout-title { font-size: 1.2rem; font-weight: bold; }
-                .layout-body { display: flex; flex: 1; height: 100%; }
-                .sidebar {
-                    width: 240px; background-color: #f4f4f4; padding: 1rem;
-                    border-right: 1px solid #ddd;
-                }
-                .sidebar nav a, .drawer nav a {
-                    display: block; padding: 0.5rem; color: #333;
-                    text-decoration: none; border-radius: 4px;
-                }
-                .sidebar nav a:hover, .drawer nav a:hover { background-color: #ddd; }
-                .main { flex: 1; padding: 1rem; }
-                .drawer {
-                    position: fixed; top: 0; left: 0; width: 240px; height: 100%;
-                    background-color: #f4f4f4; padding: 1rem;
-                    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2); z-index: 200;
-                }
-                .drawer-close {
-                    background: none; border: none; font-size: 1.2rem;
-                    margin-bottom: 1rem; cursor: pointer;
-                }
-                @media (max-width: 768px) {
-                    .sidebar { display: none; }
-                    .menu-button { display: block; }
-                    .layout-body { flex-direction: column; }
-                }
-            `}</style>
+            <link rel="stylesheet" href="/css/layout.css" />
             <div class="app-container">
                 <header class="layout-header">
                     <div class="header-left">
@@ -120,3 +80,4 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
         </div>
     );
 }
+

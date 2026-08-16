@@ -68,30 +68,7 @@ export default function Index() {
 
     return (
         <Layout chrome="header">
-            <style>{`
-                .form-container {
-                    max-width: 400px; margin: 50px auto; padding: 20px;
-                    background-color: white; border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); box-sizing: border-box;
-                }
-                .form-container h1 {
-                    font-size: 1.5rem; font-weight: bold; text-align: center; margin-bottom: 20px;
-                }
-                .form-container label { display: block; font-size: 1rem; margin-bottom: 5px; }
-                .required-mark::after { content: " *"; color: red; font-weight: bold; }
-                .form-container input {
-                    width: 100%; padding: 10px; margin-bottom: 15px;
-                    border: 1px solid #ccc; border-radius: 5px;
-                    font-size: 1rem; box-sizing: border-box;
-                }
-                .form-container .error { color: red; font-size: 0.875rem; margin-bottom: 10px; white-space: pre-wrap; }
-                .form-container button {
-                    width: 100%; padding: 12px; background-color: #007bff; color: white;
-                    border: none; border-radius: 5px; font-size: 1rem; cursor: pointer;
-                    box-sizing: border-box;
-                }
-                .form-container button:hover { background-color: #0056b3; }
-            `}</style>
+            <link rel="stylesheet" href="/css/initial.css" />
             <div class="form-container">
                 <h1>初期ユーザー作成</h1>
                 <form onSubmit={handleSubmit}>
@@ -127,3 +104,4 @@ export default function Index() {
         </Layout>
     );
 }
+

@@ -90,27 +90,7 @@ export default function Publishing({ model }: { model: Model }) {
 
     return (
         <Layout>
-            <style>{`
-                .publishing-container { padding: 2rem; max-width: 800px; margin: 0 auto; }
-                .title {
-                    font-size: 2rem; font-weight: bold; margin-bottom: 1.5rem;
-                    padding-left: 1rem; background: linear-gradient(to right, #f0f8ff, transparent);
-                }
-                .section { margin-bottom: 2rem; }
-                .label { font-weight: bold; margin-bottom: 0.5rem; }
-                .issue-form input[type="number"] {
-                    padding: 0.5rem; font-size: 1rem; width: 100px; margin-right: 1rem;
-                }
-                .issue-form button {
-                    padding: 0.5rem 1rem; font-size: 1rem; background-color: #007acc;
-                    color: white; border: none; border-radius: 0.4rem; cursor: pointer;
-                }
-                .issue-form button:disabled { background-color: #a0c5e8; cursor: not-allowed; }
-                .issue-form button:hover:not(:disabled) { background-color: #005ea2; }
-                .log-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-                .log-table th, .log-table td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
-                .log-table th { background-color: #f0f0f0; }
-            `}</style>
+            <link rel="stylesheet" href="/css/event-publishing.css" />
             <div class="publishing-container">
                 <div class="title">イベント: {eventName}</div>
 
@@ -155,3 +135,4 @@ export default function Publishing({ model }: { model: Model }) {
         </Layout>
     );
 }
+

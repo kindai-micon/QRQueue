@@ -46,40 +46,7 @@ export default function Index() {
 
     return (
         <Layout chrome="header">
-            <style>{`
-                .login-container {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    padding: 20px;
-                    border: 1px solid #ccc;
-                    border-radius: 5px;
-                    width: 300px;
-                    margin: 50px auto;
-                    position: relative;
-                }
-                .login-container h2 { margin-bottom: 20px; }
-                .form-group { margin-bottom: 15px; width: 100%; }
-                .form-group label { display: block; margin-bottom: 5px; }
-                .form-group input {
-                    width: 100%;
-                    padding: 10px;
-                    border: 1px solid #ddd;
-                    border-radius: 3px;
-                    box-sizing: border-box;
-                }
-                .login-container button {
-                    padding: 10px 20px;
-                    background-color: #007bff;
-                    color: white;
-                    border: none;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    transition: background-color 0.3s ease;
-                }
-                .login-container button:disabled { background-color: #ccc; cursor: not-allowed; }
-                .error-message { color: red; margin-top: 10px; }
-            `}</style>
+            <link rel="stylesheet" href="/css/login.css" />
             <div class="login-container">
                 <h2>ログイン</h2>
                 {errorMessage && <p class="error-message">{errorMessage}</p>}
@@ -110,3 +77,4 @@ export default function Index() {
         </Layout>
     );
 }
+

@@ -57,28 +57,7 @@ export default function Index() {
 
     return (
         <Layout>
-            <style>{`
-                .container { padding: 2rem; max-width: 800px; margin: 0 auto; }
-                .new-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-                .new-form input {
-                    flex: 1; padding: 0.5rem; border: 1px solid #ccc;
-                    border-radius: 0.5rem; font-size: 1rem;
-                }
-                .new-form button {
-                    padding: 0.5rem 1rem; border: none; background: #007acc; color: white;
-                    border-radius: 0.5rem; cursor: pointer; transition: background 0.2s;
-                }
-                .new-form button:hover { background: #005fa3; }
-                .event-list { display: grid; gap: 1rem; }
-                .event-item {
-                    padding: 1rem; border: 1px solid #ccc; border-radius: 0.75rem;
-                    background: #f9f9f9; transition: background 0.2s, box-shadow 0.2s;
-                    text-decoration: none; color: inherit; display: block;
-                }
-                .event-item:hover { background: #e9f5ff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-                .status { margin-top: 1rem; color: gray; }
-                .error { color: red; font-weight: bold; margin-top: 0.5rem; }
-            `}</style>
+            <link rel="stylesheet" href="/css/event.css" />
             <div class="container">
                 <h1>イベント一覧</h1>
 
@@ -113,3 +92,4 @@ export default function Index() {
         </Layout>
     );
 }
+
