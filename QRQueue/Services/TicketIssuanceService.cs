@@ -9,13 +9,13 @@ public interface ITicketIssuanceService
     /// <summary>
     /// チケットを発行し、ログを記録する
     /// </summary>
-    /// <param name="lotteryGroupDisplayId">抽選会のDisplayId</param>
+    /// <param name="eventDisplayId">イベントのDisplayId</param>
     /// <param name="count">発行枚数</param>
     /// <param name="initialStatus">初期ステータス</param>
     /// <param name="issuerName">発行者名</param>
     /// <returns>発行結果</returns>
     Task<TicketIssuanceResult> IssueTicketsAsync(
-        Guid lotteryGroupDisplayId,
+        Guid eventDisplayId,
         int count,
         TicketStatus initialStatus,
         string issuerName);
@@ -26,8 +26,8 @@ public class TicketIssuanceResult
     public List<Ticket> Tickets { get; set; } = [];
     public long StartNumber { get; set; }
     public long EndNumber { get; set; }
-    public Guid LotteryGroupId { get; set; }
-    public string? LotteryGroupName { get; set; }
+    public Guid EventId { get; set; }
+    public string? EventName { get; set; }
 }
 
 public class TicketIssuanceService : ITicketIssuanceService
@@ -40,7 +40,7 @@ public class TicketIssuanceService : ITicketIssuanceService
     }
 
     public async Task<TicketIssuanceResult> IssueTicketsAsync(
-        Guid lotteryGroupDisplayId,
+        Guid eventDisplayId,
         int count,
         TicketStatus initialStatus,
         string issuerName)
@@ -62,18 +62,18 @@ public class TicketIssuanceService : ITicketIssuanceService
 
         try
         {
-            // 抽選会を取得
-            var lotteryGroup = await _db.LotteryGroups
-                .FirstOrDefaultAsync(g => g.DisplayId == lotteryGroupDisplayId);
+            // イベントを取得
+            var ev = await _db.Events
+                .FirstOrDefaultAsync(e => e.DisplayId == eventDisplayId);
 
-            if (lotteryGroup == null)
+            if (ev == null)
             {
-                throw new InvalidOperationException("抽選会が見つかりません");
+                throw new InvalidOperationException("イベントが見つかりません");
             }
 
             // 次のチケット番号を取得（Serializable分離レベルで競合を防止）
             var maxNumber = await _db.Tickets
-                .Where(t => t.LotteryGroupId == lotteryGroup.Id)
+                .Where(t => t.ParticipationGroup != null && t.ParticipationGroup.EventId == ev.Id)
                 .MaxAsync(t => (long?)t.Number);
             long startNumber = (maxNumber ?? 999) + 1;
 
@@ -84,7 +84,6 @@ public class TicketIssuanceService : ITicketIssuanceService
                 tickets.Add(new Ticket
                 {
                     Number = startNumber + i,
-                    LotteryGroupId = lotteryGroup.Id,
                     Status = initialStatus
                 });
             }
@@ -99,7 +98,7 @@ public class TicketIssuanceService : ITicketIssuanceService
                 Count = count,
                 StartNumber = startNumber,
                 EndNumber = startNumber + count - 1,
-                LotteryGroupDisplayId = lotteryGroupDisplayId
+                EventDisplayId = eventDisplayId
             };
 
             _db.IssueLogs.Add(log);
@@ -113,8 +112,8 @@ public class TicketIssuanceService : ITicketIssuanceService
                 Tickets = tickets,
                 StartNumber = startNumber,
                 EndNumber = startNumber + count - 1,
-                LotteryGroupId = lotteryGroup.Id,
-                LotteryGroupName = lotteryGroup.Name
+                EventId = ev.Id,
+                EventName = ev.Name
             };
         }
         catch

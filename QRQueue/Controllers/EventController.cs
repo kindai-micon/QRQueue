@@ -1,82 +1,81 @@
-﻿using QRQueue.Models;
+using QRQueue.Models;
 using QRQueue.Models.API;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using LotteryGroup = QRQueue.Models.LotteryGroup;
+using Event = QRQueue.Models.Event;
 
 namespace QRQueue.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class LotteryGroupController(ApplicationDbContext applicationDbContext) : ControllerBase
+    public class EventController(ApplicationDbContext applicationDbContext) : ControllerBase
     {
         [Authorize]
         [HttpGet(nameof(List))]
         public async Task<IActionResult> List()
         {
-            var list = await applicationDbContext.LotteryGroups.Select(x => new { name = x.Name, id = x.DisplayId.ToString()}).ToListAsync();
+            var list = await applicationDbContext.Events.Select(x => new { name = x.Name, id = x.DisplayId.ToString()}).ToListAsync();
             return Ok(list);
         }
-        [Authorize(Policy = "LotteryGroupManagement")]
+        [Authorize(Policy = "EventManagement")]
         [HttpPost(nameof(Create))]
         public async Task<IActionResult> Create([FromBody] string name)
         {
-            if (applicationDbContext.LotteryGroups.Any(x => x.Name == name))
+            if (applicationDbContext.Events.Any(x => x.Name == name))
             {
-                return BadRequest("Lottery group already exists");
+                return BadRequest("Event already exists");
             }
             else
             {
-                var lotteryGroup = new LotteryGroup()
+                var ev = new Event()
                 {
                     Name = name,
                     TicketInfo = new TicketInfo()
                 };
 
-                await applicationDbContext.LotteryGroups.AddAsync(lotteryGroup);
+                await applicationDbContext.Events.AddAsync(ev);
                 await applicationDbContext.SaveChangesAsync();
             }
             return Ok();
         }
-        [Authorize(Policy = "LotteryGroupManagement")]
+        [Authorize(Policy = "EventManagement")]
         [HttpPost(nameof(Delete))]
         public async Task<IActionResult> Delete([FromBody] string name)
         {
-            var lotteryGroup = await applicationDbContext.LotteryGroups.FirstOrDefaultAsync(x => x.Name == name);
-            if (lotteryGroup == null)
+            var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.Name == name);
+            if (ev == null)
             {
                 return NotFound();
             }
-            applicationDbContext.LotteryGroups.Remove(lotteryGroup);
+            applicationDbContext.Events.Remove(ev);
             await applicationDbContext.SaveChangesAsync();
             return Ok();
         }
-        [Authorize(Policy = "LotteryGroupManagement")]
+        [Authorize(Policy = "EventManagement")]
         [HttpPut(nameof(Rename))]
         public async Task<IActionResult> Rename([FromBody] RenameModel renameModel)
         {
-            var lotteryGroup = await applicationDbContext.LotteryGroups.FirstOrDefaultAsync(x => x.Name == renameModel.Name);
-            if (lotteryGroup == null)
+            var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.Name == renameModel.Name);
+            if (ev == null)
             {
                 return NotFound();
             }
-            lotteryGroup.Name = renameModel.NewName;
-            applicationDbContext.LotteryGroups.Update(lotteryGroup);
+            ev.Name = renameModel.NewName;
+            applicationDbContext.Events.Update(ev);
             await applicationDbContext.SaveChangesAsync();
             return Ok();
         }
         [HttpGet(nameof(Name))]
         public async Task<IActionResult> Name([FromQuery] string id)
         {
-            var group = await applicationDbContext.LotteryGroups.FirstOrDefaultAsync(x => x.DisplayId.ToString() == id);
-            if(group == null)
+            var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.DisplayId.ToString() == id);
+            if(ev == null)
             {
                 return NotFound();
             }
-            return Ok(group?.Name);
+            return Ok(ev?.Name);
         }
         [Authorize]
 
@@ -85,21 +84,19 @@ namespace QRQueue.Controllers
         {
             var raw = System.IO.File.ReadAllText(idAndName.json);
             var tmp = JsonSerializer.Deserialize<jsonTicket[]>(raw);
-            var group = await applicationDbContext.LotteryGroups.Where(x => x.DisplayId.ToString() == idAndName.groupId).FirstOrDefaultAsync();
+            var ev = await applicationDbContext.Events.Where(x => x.DisplayId.ToString() == idAndName.groupId).FirstOrDefaultAsync();
             foreach(var item in tmp) {
                 Ticket ticket = new Ticket();
-                ticket.Status = TicketStatus.Invalid;
+                ticket.Status = TicketStatus.Registered;
                 ticket.Number = item.number;
                 ticket.DisplayId = item.displayId;
                 applicationDbContext.Tickets.Add(ticket);
-                group.Tickets.Add(ticket);
             }
             await applicationDbContext.SaveChangesAsync();
             return Ok();
         }
-        
+
     }
     public record idAndName (string groupId,string json);
     public record jsonTicket(long number,Guid displayId);
 }
-

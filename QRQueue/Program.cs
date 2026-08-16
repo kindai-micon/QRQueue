@@ -152,7 +152,7 @@ namespace QRQueue
             app.UseAuthorization();
 
             app.MapControllers();
-            app.MapHub<LotteryHub>("/api/lotteryHub");
+            app.MapHub<QueueHub>("/api/queueHub");
             app.Use(async (context, next) =>
             {
                 // /api で始まるリクエストはそのまま処理を継続
