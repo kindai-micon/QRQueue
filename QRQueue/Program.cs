@@ -15,6 +15,8 @@ using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
+using JsxCore.Hosting;
+using JsxCore.Mvc;
 namespace QRQueue
 {
     public class Program
@@ -31,6 +33,9 @@ namespace QRQueue
             }
 
             var builder = WebApplication.CreateBuilder(args);
+
+            // JsxCore: TSX/JSX ビューエンジン(Node.js 不要)
+            builder.AddJsxCore();
 
             // Add services to the container.
 
@@ -144,6 +149,7 @@ namespace QRQueue
             }
 
             app.UseStaticFiles();
+            app.UseJsxCore();
             app.UseRouting();
 
 
@@ -153,10 +159,13 @@ namespace QRQueue
 
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
+            app.MapGet("/jsx", () => Results.Extensions.Jsx("Home/Index", new { name = "QRQueue" }));
             app.Use(async (context, next) =>
             {
                 // /api で始まるリクエストはそのまま処理を継続
-                if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !context.Request.Path.StartsWithSegments("/account", StringComparison.OrdinalIgnoreCase))
+                if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+                    && !context.Request.Path.StartsWithSegments("/account", StringComparison.OrdinalIgnoreCase)
+                    && !context.Request.Path.StartsWithSegments("/jsx", StringComparison.OrdinalIgnoreCase))
                 {
                     // index.html の内容を読み込む
                     var indexPath = Path.Combine(app.Environment.WebRootPath, "index.html");

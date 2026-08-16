@@ -1,0 +1,10 @@
+{
+  "name": "qrqueue",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^7",
+    "esbuild": "^0.28.2"
+  }
+}
