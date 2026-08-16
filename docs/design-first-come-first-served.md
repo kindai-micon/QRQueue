@@ -126,7 +126,7 @@ flowchart LR
 - 呼び出し中(Calling)のグループは、**メンバーが受付に実際にそろった時点で、代表者が自分のスマホでチェックインQRを読み込む**ことで「参加した(受け付けた)」ものと確定し、グループは完了(Completed)になる。
   - 「そろったか」の判定は代表者の自己判断(代表者が読み込む行為が確定操作)。**そろっていなければ読み込まれないので、グループは呼び出し中ステータスのまま**何も起きない。
   - 代表者 = 方式③はグループ作成者、方式①は本人、方式②は参加順先頭。
-- チェックインQRの読み取りは参加者端末の localStorage の `participantToken` で本人特定する(スタッフが参加者の電子券QRをスキャンする逆向きはしない)。
+- チェックインQRの読み取りは参加者端末の **署名付きcookie(`participantToken`)** で本人特定する(スタッフが参加者の電子券QRをスキャンする逆向きはしない)。
 - 正常キューから呼び出されていたグループのチェックイン完了をトリガーに、**次の呼び出しが自動で走る**(AutoNext)。
 
 **「次を呼ぶ」と割り込みpool**:
@@ -254,7 +254,46 @@ public enum TicketStatus   // 置換
 ```
 
 - チケットのライフサイクル状態(呼び出し中/完了)は**グループ**で管理する。チケット側は「登録済み/キャンセル」のみ。
-- `ParticipantToken` は参加登録APIでクライアント(ローカルストレージ)に保存させたランダムUUID。同じ端末からの再アクセスでは既存チケットを返して二重参加を防ぐ。
+- `ParticipantToken` は参加登録APIが発行するランダムUUID(`Guid.CreateVersion7`)。**localStorage ではなく HttpOnly の署名付きcookie(§5.2.1)** に保存する。同じ端末からの再アクセスでは既存チケットを返して二重参加を防ぐ。
+
+#### 5.2.1 participantToken cookie(署名付き)
+
+参加者の端末識別は localStorage ではなく **HttpOnly cookie + ASP.NET Core の Data Protection 署名**で行う。
+
+| 項目 | 設定 |
+|---|---|
+| cookie 名 | `participant` |
+| 値 | 署名・暗号化された認証チケット。claim `participantToken`(= DB の `Ticket.ParticipantToken` と同じUUID)を含む |
+| 属性 | `HttpOnly; Secure; SameSite=Lax; Path=/`(永続 cookie、有効期限90日) |
+| 発行 | 初回の `POST /api/entry/join` 成功時(参加登録QRを初めて読んだ端末で確定) |
+| 更新 | 上書き再参加・グループ参加でも**端末単位で不変**。発行は1回きり |
+
+実装は管理ユーザーの Identity cookie と同じ `AddCookie` インフラを**別スキーム**で追加する(既定スキームは Identity のまま):
+
+```csharp
+builder.Services.AddAuthentication()
+    .AddCookie("Participant", options =>
+    {
+        options.Cookie.Name = "participant";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan = TimeSpan.FromDays(90);
+        options.SlidingExpiration = false;
+        // participantToken claim ⇔ DB 照合(失効済みトークンなら拒否)
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            /* Ticket.ParticipantGroup の状態と突き合わせて reject */
+        };
+    });
+```
+
+- 参加登録成功時に `SignInAsync("Participant", principal, isPersistent: true)` で発行。**Data Protection の署名・暗号化により改ざん・偽造・JS からの読み取りが不可能**(鍵は管理cookieと同じキーリング)。
+- 各参加APIは body の `participantToken` を廃止し、`User.FindFirstValue("participantToken")` で取得する。cookie がない/無効な場合は未参加として扱う。
+- `SameSite=Lax` により、チェックインQR(自サイトURL)への遷移では送られるが**他サイトからの POST には付かない**ため、チェックインAPIの CSRF も構造的に防ぐ。
+- cookie はリクエストに自動添付されるため、`GET /entry/{eventDisplayId}` を**サーバー側で復元判定して 302 リダイレクト**できる(SSR で完結し、JS による画面遷移よりちらつかない)。
+
+> `DisplayId`(電子券URLの鍵)は引き続き URL のみに載せる。cookie に入れる参加者識別は `participantToken` のみ。
 
 #### 削除・廃止
 
@@ -300,11 +339,11 @@ stateDiagram-v2
 | エンドポイント | リクエスト | レスポンス / 動作 |
 |---|---|---|
 | `GET /api/entry/{eventDisplayId}` | — | イベント名・受付状態(Openか)・グループ上限。参加登録画面の初期化 |
-| `POST /api/entry/join` | `{ eventDisplayId, mode: "solo" \| "pool" \| "group-create", participantToken }` | `{ ticketDisplayId, groupNumber?, joinToken? }`。solo=即キュー+採番 / pool=マッチングプールへ / group-create=グループ作成+代表者登録+採番。`participantToken` が既存の有効な参加に一致する場合は 409(クライアントは「参加し直す」で明示的に上書きフラグを付けて再送、または既存券を復元) |
-| `POST /api/entry/restore` | `{ eventDisplayId, participantToken }` | `{ ticketDisplayId }`。同一端末からイベントページを再び開いた際、localStorage の `participantToken` で**電子券を復元**して `/ticket/{displayId}` へ遷移(電子券は紙がないためURL喪失対策が必須) |
-| `POST /api/entry/checkin` | `{ eventDisplayId, participantToken }` | チェックインQRの飛び先が呼ぶAPI(§4.6)。`participantToken` で特定した参加者の属するグループが `Calling` なら **Completed に確定(受付完了)** し、AutoNext(次の呼び出し)を発火。`Interrupted` なら同様に完了し、**次の呼び出しに割り込んで**処理対象にする。`Waiting`/`Matching` なら 409「まだ呼び出されていません」。**参加者がグループの代表者でない場合も 409「代表者のスマホから読み取ってください」**。そろっていない場合に読み取られない限り、グループは `Calling` のまま何も変化しない |
+| `POST /api/entry/join` | `{ eventDisplayId, mode: "solo" \| "pool" \| "group-create", overwrite?: bool }` | `{ ticketDisplayId, groupNumber?, joinToken? }`。solo=即キュー+採番 / pool=マッチングプールへ / group-create=グループ作成+代表者登録+採番。**参加者cookie**が既存の有効な参加に一致する場合は 409(クライアントは `overwrite: true` を付けて再送、または既存券を復元)。新規参加の場合はこのレスポンスで参加者cookie(§5.2.1)を発行 |
+| `POST /api/entry/restore` | `{ eventDisplayId }` | `{ ticketDisplayId }`。同一端末からイベントページを再び開いた際、**参加者cookie**で**電子券を復元**して `/ticket/{displayId}` へ遷移(電子券は紙がないためURL喪失対策が必須)。cookieがない/該当なしは 404 |
+| `POST /api/entry/checkin` | `{ eventDisplayId }` | チェックインQRの飛び先が呼ぶAPI(§4.6)。**参加者cookie**で特定した参加者の属するグループが `Calling` なら **Completed に確定(受付完了)** し、AutoNext(次の呼び出し)を発火。`Interrupted` なら同様に完了し、**次の呼び出しに割り込んで**処理対象にする。`Waiting`/`Matching` なら 409「まだ呼び出されていません」。**参加者がグループの代表者でない場合も 409「代表者のスマホから読み取ってください」**。そろっていない場合に読み取られない限り、グループは `Calling` のまま何も変化しない |
 | `GET /api/entry/group/{joinToken}` | — | `{ groupNumber, memberCount, isFull, isJoinable }`。メンバー参加確認画面用 |
-| `POST /api/entry/group/join` | `{ joinToken, participantToken }` | `{ ticketDisplayId, groupNumber }`。既にどこかに参加済みなら上書き(旧グループ離脱/Cancelled)処理を行う。満員・joinToken無効・呼び出し済みは 409 |
+| `POST /api/entry/group/join` | `{ joinToken }` | `{ ticketDisplayId, groupNumber }`。既にどこかに参加済み(参加者cookieで判定)なら上書き(旧グループ離脱/Cancelled)処理を行う。満員・joinToken無効・呼び出し済みは 409 |
 | `GET /api/ticket/{guid}` | — | 既存流用。レスポンスを `{ eventDisplayId, eventName, groupNumber, status, currentCallingNumber, aheadCount }` へ拡張 |
 | `POST /api/push-subscription/{guid}` | — | 既存流用。呼び出し通知に転用 |
 
@@ -361,7 +400,7 @@ Web Push(`PushSubscriptionService`)は `SendLotteryPushAsync` を `SendCallPushA
 | グループ参加QR | `{base}/join/{joinToken}` | サーバ側でPNG返却(`GET /api/entry/group/{joinToken}/qrcode`)し代表者の電子券画面に `<img>` 表示 | グループメンバー |
 | 電子券URL | `{base}/ticket/{ticketDisplayId}` | 変更なし(参加者は通知URL/ブックマーク/ホーム画面追加で再訪) | 参加者自身 |
 
-> チケット本体の印刷物(PDF・レシート)は発行しない。参加者の電子券画面が唯一の参加証であり、URL(QR)の再取得は `participantToken` から復元できる(§6.1)。
+> チケット本体の印刷物(PDF・レシート)は発行しない。参加者の電子券画面が唯一の参加証であり、URL(QR)の再取得は参加者cookieの `participantToken` から復元できる(§6.1)。
 
 BaseURL 解決は既存 `TicketPdfController` のロジック(`LotteryBaseUrl` 設定 → Host → localhostならローカルIP変換)を共通化して使う。
 
@@ -374,9 +413,9 @@ BaseURL 解決は既存 `TicketPdfController` のロジック(`LotteryBaseUrl` �
 | ルート | 認証 | 内容 |
 |---|---|---|
 | `/event`(旧 `/lottery` をリネーム) | 必要(改造) | イベント一覧・作成(イベント管理の起点) |
-| `/entry/[eventid]` | **不要(新規)** | 参加登録画面。イベント名表示+参加方式選択(①単独/②おまかせグループ/③グループ作成)。participantToken を localStorage に発行・保持。**再訪時は participantToken で restore し既存の電子券へ復元遷移**。登録後 `/ticket/{displayId}` へ遷移 |
+| `/entry/[eventid]` | **不要(新規)** | 参加登録画面。イベント名表示+参加方式選択(①単独/②おまかせグループ/③グループ作成)。参加者cookieは参加登録時にサーバーが発行(クライアント側の保存処理は不要)。**再訪時はサーバー側で参加者cookieを判定し、既存の電子券へ 302 リダイレクト**。登録後 `/ticket/{displayId}` へ遷移 |
 | `/join/[token]` | **不要(新規)** | グループ参加確認画面。グループ番号・現在人数を表示し「このグループに参加」。既にどこかに参加中なら「現在の参加をキャンセルして参加し直す」確認を出す |
-| `/checkin/[eventid]` | **不要(新規)** | チェックインQRの飛び先。localStorage の `participantToken` で `POST /api/entry/checkin` を呼ぶ。成功なら「チェックイン完了」表示→電子券へ遷移、**グループがまだ呼び出されていない/代表者でなければ「まだ確定できません」を表示して何も変えない** |
+| `/checkin/[eventid]` | **不要(新規)** | チェックインQRの飛び先。参加者cookieを添えて `POST /api/entry/checkin` を呼ぶ。成功なら「チェックイン完了」表示→電子券へ遷移、**グループがまだ呼び出されていない/代表者でなければ「まだ確定できません」を表示して何も変えない** |
 | `/ticket/[ticketid]` | 不要(改造) | **電子券画面(参加証そのもの)**。**グループ番号を大型表示**、現在呼び出し中の番号、自分の前に待っているグループ数、状態バッジ(待ち/呼び出し中/割り込みpool/完了)。方式③代表者は**グループ参加QRをここに表示**。呼び出し中で代表者なら**「メンバーがそろったら受付のチェックインQRを読んでください」と促す表示**。「ホーム画面に追加」促導線も表示。Push登録ボタンは既存流用 |
 | `/event/[eventid]/call`(新規、旧execute置換) | 必要 | 呼び出しコンソール。**次を呼ぶ**(未チェックインGrの割り込みpool退避を含む)/**再呼び出し**/受付開閉。現在呼び出し中・正常キュー・割り込みpool・プール人数の一覧表示。グループの完了は参加者のチェックインで行うため完了ボタンは基本不要 |
 | `/event/[eventid]/queue` | 必要 | 管理用キュー一覧(番号・人数・状態・待ち状況)。旧tickets画面の置換 |
@@ -420,7 +459,7 @@ flowchart TD
 | Phase | 内容 | 主な変更箇所 |
 |---|---|---|
 | **1. バックエンド基盤** | モデル/DbContext/マイグレーション、`ParticipationGroup`、番号採番サービス(`TicketIssuanceService` のグループ版) | `Models/`, `Migrations/`, `Services/` |
-| **2. 参加API** | `EntryController`(join/group/join)、participantToken、上書きロジック、`TicketController.GET` 拡張 | `Controllers/` |
+| **2. 参加API** | `EntryController`(join/group/join)、参加者cookie(署名付き participantToken)の発行・検証、上書きロジック、`TicketController.GET` 拡張 | `Controllers/`, `Program.cs` |
 | **3. 呼出API** | `CallController`、SignalR `Called`/`QueueChanged`、Push転用 | `Controllers/`, `Hubs/`, `Services/PushSubscriptionService.cs` |
 | **4. フロント参加者** | `/entry`, `/join`, `/ticket` 改造、QR表示 | `qrqueue.client/src/routes/` |
 | **5. フロント管理/表示** | `/call`, `/queue`, `/display` 改造、旧画面削除 | 同上 |
@@ -460,7 +499,7 @@ flowchart TD
 - 呼び出しタイムアウト(一定時間で再呼び→自動退避)の自動化。
 - ~~`LotteryGroup`/`LotteryHub`/URL `/lottery/*` のリネーム~~ → **Phase 8 として本体に組み込んだ**(§11)。
 - なりすまし対策: joinToken の有効期限(代表者の画面を閉じてから一定時間で失効)。
-- 電子券URLの喪失対策: localStorage の participantToken による復元(同一端末)は本設計に含むが、**機種変更・端末交代・ブラウザ変更**時の引継ぎ(スタッフによる番号照会・再発行)は未対応。必要なら管理画面に照会UIを追加。
+- 電子券URLの喪失対策: 参加者cookie(署名付き participantToken)による復元(同一端末・同一ブラウザ)は本設計に含むが、**機種変更・端末交代・ブラウザ変更**時の引継ぎ(スタッフによる番号照会・再発行)は未対応。必要なら管理画面に照会UIを追加。
 - 参加者への「あとN組」通知(Push の活用拡大)。
 
 ---
