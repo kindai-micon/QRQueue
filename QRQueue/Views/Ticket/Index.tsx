@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
+import Layout from "@/Shared/Layout";
 
 type TicketStatus = {
     number: number;
@@ -175,7 +176,7 @@ export default function Index({ model }: { model: Model }) {
     const statusLabel = ticketData ? STATUS_LABELS[ticketData.status] ?? ticketData.status : null;
 
     return (
-        <div>
+        <Layout chrome="header">
             <style>{`
                 body { margin: 0; padding: 0; background-color: #f5f5f5; }
                 .container {
@@ -286,6 +287,6 @@ export default function Index({ model }: { model: Model }) {
                     </div>
                 </div>
             )}
-        </div>
+        </Layout>
     );
 }

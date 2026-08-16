@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import Layout from "@/Shared/Layout";
 
 // SvelteKit routes/login/+page.svelte から移行
 export default function Index() {
@@ -44,7 +45,7 @@ export default function Index() {
     }
 
     return (
-        <div>
+        <Layout chrome="header">
             <style>{`
                 .login-container {
                     display: flex;
@@ -106,6 +107,6 @@ export default function Index() {
                     </button>
                 </form>
             </div>
-        </div>
+        </Layout>
     );
 }

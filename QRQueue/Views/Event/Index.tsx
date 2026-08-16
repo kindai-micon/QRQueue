@@ -1,4 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
+import Layout from "@/Shared/Layout";
 
 type EventItem = {
     name: string;
@@ -55,7 +56,7 @@ export default function Index() {
     }, []);
 
     return (
-        <div>
+        <Layout>
             <style>{`
                 .container { padding: 2rem; max-width: 800px; margin: 0 auto; }
                 .new-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
@@ -109,6 +110,6 @@ export default function Index() {
                     </div>
                 )}
             </div>
-        </div>
+        </Layout>
     );
 }

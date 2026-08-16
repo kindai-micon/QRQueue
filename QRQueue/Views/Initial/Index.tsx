@@ -1,4 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
+import Layout from "@/Shared/Layout";
 
 // SvelteKit routes/initial/+page.svelte から移行
 export default function Index() {
@@ -66,9 +67,8 @@ export default function Index() {
     }
 
     return (
-        <div>
+        <Layout chrome="header">
             <style>{`
-                body { margin: 0; font-family: sans-serif; }
                 .form-container {
                     max-width: 400px; margin: 50px auto; padding: 20px;
                     background-color: white; border-radius: 10px;
@@ -124,6 +124,6 @@ export default function Index() {
                     <button type="submit">作成する</button>
                 </form>
             </div>
-        </div>
+        </Layout>
     );
 }

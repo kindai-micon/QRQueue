@@ -9,12 +9,16 @@ const MENU_ITEMS = [
     { name: "イベント管理", href: "/event" },
 ];
 
-export default function Layout({ children }: { children?: ComponentChildren }) {
+export default function Layout({ children, chrome = "full" }: { children?: ComponentChildren; chrome?: "full" | "header" }) {
     const [userName, setUserName] = useState<string | null>(null);
     const [checked, setChecked] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
 
     useEffect(() => {
+        // ヘッダーのみのページ(ログイン・初期登録・チケット確認)では
+        // 認証チェックを行わない(Svelte 版レイアウトと同じ挙動)
+        if (chrome === "header") return;
+
         (async () => {
             try {
                 const res = await fetch("/api/user/MyInfo");
@@ -28,7 +32,7 @@ export default function Layout({ children }: { children?: ComponentChildren }) {
                 setChecked(true);
             }
         })();
-    }, []);
+    }, [chrome]);
 
     useEffect(() => {
         if (checked && userName === null) {
@@ -82,7 +86,9 @@ export default function Layout({ children }: { children?: ComponentChildren }) {
             <div class="app-container">
                 <header class="layout-header">
                     <div class="header-left">
-                        <button class="menu-button" onClick={() => setDrawerOpen(!drawerOpen)}>☰</button>
+                        {chrome === "full" && (
+                            <button class="menu-button" onClick={() => setDrawerOpen(!drawerOpen)}>☰</button>
+                        )}
                         <div class="title">QRQueue 管理システム</div>
                     </div>
                 </header>
@@ -99,13 +105,15 @@ export default function Layout({ children }: { children?: ComponentChildren }) {
                     </div>
                 )}
                 <div class="layout-body">
-                    <aside class="sidebar">
-                        <nav>
-                            {MENU_ITEMS.map((item) => (
-                                <a key={item.href} href={item.href}>{item.name}</a>
-                            ))}
-                        </nav>
-                    </aside>
+                    {chrome === "full" && (
+                        <aside class="sidebar">
+                            <nav>
+                                {MENU_ITEMS.map((item) => (
+                                    <a key={item.href} href={item.href}>{item.name}</a>
+                                ))}
+                            </nav>
+                        </aside>
+                    )}
                     <main class="main">{children}</main>
                 </div>
             </div>
