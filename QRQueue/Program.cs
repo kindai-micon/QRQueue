@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QRQueue.Services;
+using QRQueue.Repositories;
+using QRQueue.Repositories.Implementations;
 using System.Text.Json.Serialization;
 using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -59,6 +61,11 @@ namespace QRQueue
             {
                 options.UseNpgsql(builder.Configuration.GetConnectionString("lottery-db"));
             });
+            // Repository層(コントローラ・サービスはこれ経由でデータアクセスする)
+            builder.Services.AddScoped<IEventRepository, EventRepository>();
+            builder.Services.AddScoped<IParticipationGroupRepository, ParticipationGroupRepository>();
+            builder.Services.AddScoped<ITicketRepository, TicketRepository>();
+            builder.Services.AddScoped<IIssueLogRepository, IssueLogRepository>();
 
             // CORS設定: 開発環境は全許可、本番はappsettings.jsonから取得
             builder.Services.AddCors(options =>
