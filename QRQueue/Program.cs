@@ -15,6 +15,7 @@ using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
+using JsxCore;
 using JsxCore.Hosting;
 using JsxCore.Mvc;
 namespace QRQueue
@@ -159,7 +160,7 @@ namespace QRQueue
 
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
-            app.MapGet("/jsx", () => Results.Extensions.Jsx("Home/Index", new { name = "QRQueue" }));
+            app.MapGet("/jsx", () => Results.Extensions.Jsx("Home/Index", new { name = "QRQueue" }, RenderMode.Server));
             app.Use(async (context, next) =>
             {
                 // /api で始まるリクエストはそのまま処理を継続
