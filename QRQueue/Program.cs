@@ -160,31 +160,19 @@ namespace QRQueue
 
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
-            app.MapGet("/jsx", () => Results.Extensions.Jsx("Home/Index", new { name = "QRQueue" }, RenderMode.Server));
-            // SvelteKit から移行した View(スパイク)
-            app.MapGet("/views/login", () => Results.Extensions.Jsx("Login/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/views/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/views/ticket/{ticketId}", (string ticketId) => Results.Extensions.Jsx("Ticket/Index", new { ticketId }, RenderMode.ServerAndClient));
-            app.Use(async (context, next) =>
-            {
-                // /api で始まるリクエストはそのまま処理を継続
-                if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/account", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/jsx", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/views", StringComparison.OrdinalIgnoreCase))
-                {
-                    // index.html の内容を読み込む
-                    var indexPath = Path.Combine(app.Environment.WebRootPath, "index.html");
-                    if (File.Exists(indexPath))
-                    {
-                        context.Response.ContentType = "text/html";
-                        await context.Response.SendFileAsync(indexPath);
-                        return; // index.html を返したら処理を終了
-                    }
-                }
-
-                await next(); // /api の場合は次のミドルウェアへ
-            });
+            // JsxCore View ルーティング(SvelteKit から全面移行)
+            app.MapGet("/", () => Results.Extensions.Jsx("Home/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/initial", () => Results.Extensions.Jsx("Initial/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/login", () => Results.Extensions.Jsx("Login/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/roles", () => Results.Extensions.Jsx("Roles/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/users", () => Results.Extensions.Jsx("Users/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/users/{username}", (string username) => Results.Extensions.Jsx("Users/Detail", new { username }, RenderMode.ServerAndClient));
+            app.MapGet("/admin/delete-data", () => Results.Extensions.Jsx("Admin/DeleteData", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}", (string eventid) => Results.Extensions.Jsx("Event/Detail", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}/tickets", (string eventid) => Results.Extensions.Jsx("Event/Tickets", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();

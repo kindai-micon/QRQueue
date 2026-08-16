@@ -4,9 +4,8 @@
 
 ## 構成
 
-- **QRQueue** - ASP.NET Core Web API（バックエンド）
+- **QRQueue** - ASP.NET Core Web アプリ（バックエンド + JsxCore による TSX ビュー）
 - **QRQueue.Aspire** - .NET Aspire開発環境オーケストレーション
-- **qrqueue.client** - Svelteフロントエンド
 
 ## ディレクトリ構造
 
@@ -23,7 +22,7 @@ QRQueue/
 │   ├── Services/                   # ビジネスロジック
 │   ├── Hubs/                       # SignalRハブ
 │   ├── Migrations/                 # DBマイグレーション
-│   ├── qrqueue.client/ # フロントエンド (SvelteKit)
+│   ├── Views/                      # フロントエンド (JsxCore / TSX)
 │   └── appsettings.json
 ├── QRQueue.Aspire/     # 開発環境オーケストレーション
 │   ├── QRQueue.Aspire.AppHost/
@@ -40,8 +39,7 @@ QRQueue/
 - PostgreSQL
 
 ### フロントエンド
-- SvelteKit
-- TypeScript
+- JsxCore（TSX ビューエンジン、Node.js 不要）
 
 ### 開発環境（.NET Aspire）
 - .NET Aspire 9.5
@@ -53,8 +51,6 @@ QRQueue/
 | ソフトウェア | バージョン | 備考 |
 |-------------|-----------|------|
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.0 | `dotnet --version`で確認 |
-| [Node.js](https://nodejs.org/) | 20+ | `node --version`で確認（npm同梱） |
-| npm | 10+ | `npm --version`で確認 |
 | [Docker Desktop](https://www.docker.com/products/docker-desktop) | 最新 | Aspire用コンテナ実行環境 |
 | [Git](https://git-scm.com/) | 最新 | `git --version`で確認 |
 
@@ -62,8 +58,6 @@ QRQueue/
 
 ```bash
 dotnet --version    # 10.0.x
-node --version      # v20.x.x
-npm --version       # 10.x.x
 docker --version    # Docker version ...
 git --version       # git version ...
 ```
@@ -75,13 +69,8 @@ git --version       # git version ...
 git clone https://github.com/kindai-micon/QRQueue.git
 cd QRQueue
 
-# .NETの依存関係を復元
+# .NETの依存関係を復元（JsxCore の依存もビルド時に自動復元）
 dotnet restore
-
-# フロントエンドの依存関係をインストール
-cd QRQueue/qrqueue.client
-npm install
-cd ../..
 
 # Aspire AppHostを実行（PostgreSQL含む）
 dotnet run --project QRQueue.Aspire/QRQueue.Aspire.AppHost
