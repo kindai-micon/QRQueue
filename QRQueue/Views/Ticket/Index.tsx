@@ -21,10 +21,88 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 // SvelteKit routes/ticket/[ticketid]/+page.svelte から移行
-// (プッシュ通知登録は未移行)
 export default function Index({ model }: { model: Model }) {
     const [ticketData, setTicketData] = useState<TicketStatus | null>(null);
     const [loaded, setLoaded] = useState(false);
+    const [notifications, setNotifications] = useState<string[]>([]);
+    const [notification, setNotification] = useState(false);
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem("notifications");
+            const list: string[] = stored ? JSON.parse(stored) : [];
+            setNotifications(list);
+            setNotification(list.includes(model.ticketId));
+
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.register("/service-worker.js");
+                navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription()).then((sub) => {
+                    if (!sub && list.includes(model.ticketId)) {
+                        const updated = list.filter((v) => v !== model.ticketId);
+                        setNotifications(updated);
+                        setNotification(false);
+                        localStorage.setItem("notifications", JSON.stringify(updated));
+                    }
+                });
+            }
+        } catch (err) {
+            console.error("通知設定の読み込みに失敗:", err);
+        }
+    }, [model.ticketId]);
+
+    async function getVapidPublicKey(): Promise<string> {
+        const res = await fetch("/api/push-subscription/vapid-public-key");
+        if (!res.ok) {
+            throw new Error("Failed to get VAPID key");
+        }
+        const data = await res.json();
+        return data.publicKey;
+    }
+
+    function urlBase64ToUint8Array(base64String: string): Uint8Array {
+        const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = atob(base64);
+        return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+    }
+
+    async function subscribeNotification() {
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+
+        if (!notification || !sub) {
+            if ("serviceWorker" in navigator) {
+                if (Notification.permission === "default") {
+                    await Notification.requestPermission();
+                }
+
+                if (Notification.permission === "granted") {
+                    const publicKey = await getVapidPublicKey();
+                    if (!sub) {
+                        sub = await reg.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array(publicKey),
+                        });
+                    }
+
+                    try {
+                        await fetch(`/api/push-subscription/${model.ticketId}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(sub),
+                        });
+                    } catch (error) {
+                        console.error("Error loading data:", error);
+                    }
+
+                    setNotification(true);
+                    const updated = [...notifications, model.ticketId];
+                    setNotifications(updated);
+                    localStorage.setItem("notifications", JSON.stringify(updated));
+                }
+            }
+        }
+    }
 
     useEffect(() => {
         let connection: HubConnection | null = null;
@@ -140,10 +218,25 @@ export default function Index({ model }: { model: Model }) {
                 .alert-completed { background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; }
                 .alert-sub { font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400; }
                 .loading { text-align: center; padding: 3rem 1rem; font-size: 1.1rem; color: #666; }
+                .notification-btn {
+                    border: none; margin-left: auto; padding: 0.7rem 1.2rem;
+                    border-radius: 50px; font-weight: 600; color: white; cursor: pointer;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+                    transition: background-color 0.2s ease, transform 0.1s ease;
+                }
+                .notification-registration { background-color: #4caf50; }
+                .notification-no-registration { background-color: #9e9e9e; }
+                .notification-btn:active { transform: scale(0.95); }
             `}</style>
             {loaded ? (
                 ticketData ? (
                     <div class="container">
+                        <button
+                            class={`notification-btn ${notification ? "notification-registration" : "notification-no-registration"}`}
+                            onClick={subscribeNotification}
+                        >
+                            呼び出し通知{notification ? "登録済み✔" : "登録"}
+                        </button>
                         <div class="header">
                             <h1>チケット確認</h1>
                             <p>QRコード読み込み完了</p>
