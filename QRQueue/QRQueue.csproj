@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="JsxCore" Version="1.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
@@ -23,32 +24,10 @@
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
   </ItemGroup>
 
-	<Target Name="NpmBuild" BeforeTargets="Build">
-		<Message Text="#Start npm run build" Importance="high" />
-		<Exec Command="npm run build" WorkingDirectory="./qrqueue.client" />
-	</Target>
-	<Target Name="CleanFront" BeforeTargets="NpmBuild">
-		<RemoveDir Directories="./wwwroot" />
-	</Target>
-	<ItemGroup>
-	  <TypeScriptCompile Include="qrqueue.client\src\lib\models\user.ts" />
-	  <TypeScriptCompile Include="qrqueue.client\src\store\UserStore.ts" />
-	</ItemGroup>
-	<ItemGroup>
-		<Content Update="wwwroot\**" CopyToPublishDirectory="Never" />
-		<Content Update="ClientApp\**" CopyToPublishDirectory="Never" />
-	</ItemGroup>
-	<ItemGroup>
-	  <None Update="fonts\NotoSansJP.ttf">
-	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </None>
-	</ItemGroup>
+  <ItemGroup>
+    <None Update="fonts\NotoSansJP.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
-	<Target Name="CopyPublish" AfterTargets="Publish">
-		<Message Text="## Copy Vite build output" Importance="high" />
-		<ItemGroup>
-			<FrontendFiles Include="$(ProjectDir)wwwroot\**\*.*" />
-		</ItemGroup>
-		<Copy SourceFiles="@(FrontendFiles)" DestinationFolder="$(PublishDir)wwwroot\%(RecursiveDir)" />
-	</Target>
 </Project>

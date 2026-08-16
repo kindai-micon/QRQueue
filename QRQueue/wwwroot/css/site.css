@@ -1,0 +1,107 @@
+/* 全ページ共通スタイル(Layout.tsx で読み込み。ページ個別 css はこれより後に読み込まれ上書きできる) */
+
+/* ページ見出し(event 系ページはページ個別 css で .page-title を上書き) */
+.page-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 16px;
+}
+
+/* セクション・ラベル */
+.section { margin-bottom: 1.5rem; }
+.label { font-weight: bold; margin-bottom: 8px; }
+
+/* ボタン */
+.btn-primary,
+.btn-danger,
+.btn-secondary {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+.btn-primary { background-color: #007bff; }
+.btn-primary:hover { background-color: #0056b3; }
+.btn-danger { background-color: #dc3545; }
+.btn-danger:hover { background-color: #c82333; }
+.btn-secondary { background-color: #6c757d; }
+.btn-secondary:hover { background-color: #5a6268; }
+.btn-primary:disabled,
+.btn-danger:disabled,
+.btn-secondary:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+.btn-sm { padding: 6px 12px; }
+.btn-block { width: 100%; box-sizing: border-box; }
+
+/* フォーム */
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 5px; }
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+.form-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+.password-input { position: relative; }
+.password-input input { padding-right: 80px; }
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #007bff;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0;
+}
+
+/* モーダル */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.modal h2,
+.modal h3 { margin-top: 0; }
+.modal-title { font-size: 18px; font-weight: bold; margin-bottom: 12px; }
+.modal-content { margin-bottom: 16px; }
+.modal-buttons { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.modal-error { color: red; margin-top: 10px; }
+
+/* テーブル */
+.data-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.data-table th,
+.data-table td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
+.data-table th { background-color: #f0f0f0; }
+
+/* エラー表示 */
+.error { color: red; margin-top: 10px; margin-bottom: 10px; }

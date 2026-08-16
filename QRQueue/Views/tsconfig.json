@@ -1,0 +1,74 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "es2022",
+      "dom",
+      "dom.iterable"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "rewriteRelativeImportExtensions": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noEmitOnError": false,
+    "noEmit": true,
+    "paths": {
+      "dotnet:rendering": [
+        "../obj/JsxCore/runtime/index.d.ts"
+      ],
+      "dotnet:rendering/head": [
+        "../obj/JsxCore/runtime/head.d.ts"
+      ],
+      "@jsxcore/client": [
+        "../obj/JsxCore/runtime/client.d.ts"
+      ],
+      "@/*": [
+        "./*"
+      ],
+      "dotnet:*": [
+        "../obj/JsxCore/types/*.d.ts"
+      ],
+      "preact": [
+        "../obj/JsxCore/preact-types/preact/src/index.d.ts"
+      ],
+      "preact/hooks": [
+        "../obj/JsxCore/preact-types/preact/hooks/src/index.d.ts"
+      ],
+      "preact/jsx-runtime": [
+        "../obj/JsxCore/preact-types/preact/jsx-runtime/src/index.d.ts"
+      ],
+      "preact/jsx-dev-runtime": [
+        "../obj/JsxCore/preact-types/preact/jsx-runtime/src/index.d.ts"
+      ],
+      "preact/compat": [
+        "../obj/JsxCore/preact-types/preact/compat/src/index.d.ts"
+      ],
+      "preact-render-to-string": [
+        "../obj/JsxCore/preact-types/preact-render-to-string/dist/index.d.ts"
+      ],
+      "react": [
+        "../obj/JsxCore/preact-types/preact/compat/src/index.d.ts"
+      ],
+      "react-dom": [
+        "../obj/JsxCore/preact-types/preact/compat/src/index.d.ts"
+      ],
+      "react-dom/client": [
+        "../obj/JsxCore/preact-types/preact/compat/src/index.d.ts"
+      ]
+    }
+  },
+  "//": "jsxcore-generated: written by JsxCore so editors can resolve 'dotnet:rendering'. Delete or edit this file freely; JsxCore only overwrites a file that still contains the marker above. Compilation itself uses the config in the intermediate output directory, not this one.",
+  "include": [
+    "**/*",
+    "../obj/JsxCore/types/**/*.d.ts",
+    "../obj/JsxCore/jsxcore-assets.d.ts"
+  ]
+}

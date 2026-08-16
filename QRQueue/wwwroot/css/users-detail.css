@@ -1,0 +1,14 @@
+/* QRQueue/Views/Users/Detail.tsx 用スタイル(共通部分は site.css) */
+.container { max-width: 800px; margin: auto; padding: 20px; }
+.role { border: 1px solid #ccc; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+.role-name { font-size: 18px; font-weight: bold; }
+.authority-list { margin-top: 8px; }
+.role .btn-danger { margin-top: 8px; }
+.back-link {
+    display: inline-block;
+    margin-bottom: 16px;
+    text-decoration: none;
+    color: #3498db;
+    font-weight: bold;
+}
+.back-link:hover { text-decoration: underline; }

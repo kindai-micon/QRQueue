@@ -1,0 +1,46 @@
+/* QRQueue/Views/Roles/Index.tsx 用スタイル(共通部分は site.css) */
+.roles-container { display: flex; flex-direction: column; align-items: center; padding: 2rem; }
+.input-area { margin-bottom: 1rem; display: flex; gap: 0.3rem; }
+.input-area input[type="text"] { padding: 0.4rem; width: 200px; }
+.role-card {
+    border: 1px solid #ccc;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    width: 300px;
+    text-align: left;
+}
+.role-header { font-weight: bold; margin-bottom: 1rem; text-align: center; }
+.role-header .btn-danger { float: right; }
+.authority-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0.3rem 0;
+}
+.switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    background-color: #ccc;
+    border-radius: 34px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transition: .2s;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: .2s;
+}
+.switch input:checked + .slider { background-color: #4caf50; }
+.switch input:checked + .slider:before { transform: translateX(20px); }
+.switch input:disabled + .slider { background-color: #aaa; cursor: not-allowed; opacity: 0.6; }

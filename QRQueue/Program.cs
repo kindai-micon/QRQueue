@@ -4,17 +4,17 @@ using QRQueue.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.ApplicationParts;
-using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using QRQueue.Services;
 using System.Text.Json.Serialization;
 using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
+using JsxCore;
+using JsxCore.Hosting;
+using JsxCore.Mvc;
 namespace QRQueue
 {
     public class Program
@@ -31,6 +31,12 @@ namespace QRQueue
             }
 
             var builder = WebApplication.CreateBuilder(args);
+
+            // JsxCore: TSX/JSX ビューエンジン(Node.js 不要)
+            builder.AddJsxCore(options =>
+            {
+                options.Document.Language = "ja";
+            });
 
             // Add services to the container.
 
@@ -144,6 +150,7 @@ namespace QRQueue
             }
 
             app.UseStaticFiles();
+            app.UseJsxCore();
             app.UseRouting();
 
 
@@ -153,23 +160,19 @@ namespace QRQueue
 
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
-            app.Use(async (context, next) =>
-            {
-                // /api で始まるリクエストはそのまま処理を継続
-                if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !context.Request.Path.StartsWithSegments("/account", StringComparison.OrdinalIgnoreCase))
-                {
-                    // index.html の内容を読み込む
-                    var indexPath = Path.Combine(app.Environment.WebRootPath, "index.html");
-                    if (File.Exists(indexPath))
-                    {
-                        context.Response.ContentType = "text/html";
-                        await context.Response.SendFileAsync(indexPath);
-                        return; // index.html を返したら処理を終了
-                    }
-                }
-
-                await next(); // /api の場合は次のミドルウェアへ
-            });
+            // JsxCore View ルーティング(SvelteKit から全面移行)
+            app.MapGet("/", () => Results.Extensions.Jsx("Home/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/initial", () => Results.Extensions.Jsx("Initial/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/login", () => Results.Extensions.Jsx("Login/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/roles", () => Results.Extensions.Jsx("Roles/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/users", () => Results.Extensions.Jsx("Users/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/users/{username}", (string username) => Results.Extensions.Jsx("Users/Detail", new { username }, RenderMode.ServerAndClient));
+            app.MapGet("/admin/delete-data", () => Results.Extensions.Jsx("Admin/DeleteData", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}", (string eventid) => Results.Extensions.Jsx("Event/Detail", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}/tickets", (string eventid) => Results.Extensions.Jsx("Event/Tickets", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();
