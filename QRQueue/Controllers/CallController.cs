@@ -42,7 +42,7 @@ namespace QRQueue.Controllers
             {
                 return NotFound();
             }
-            ev.Status = EventStatus.Close;
+            ev.Status = EventStatus.Closed;
             await _db.SaveChangesAsync();
             return Ok();
         }
