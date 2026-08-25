@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QRQueue.Models;
+using QRQueue.Models.API;
 using QRQueue.Services;
 using System.Net.NetworkInformation;
 
@@ -13,10 +14,19 @@ namespace QRQueue.Controllers
     public class CallController/*(ApplicationDbContext applicationDbContext)*/ : ControllerBase
     {
         private readonly ApplicationDbContext _db;
+        private readonly PushSubscriptionService _pushSubscriptionService;  //追加.
 
-        public CallController(ApplicationDbContext db)
+        /*public CallController(ApplicationDbContext db)
         {
             _db = db;
+        }*/
+
+        public CallController(
+                 ApplicationDbContext db,
+                 PushSubscriptionService pushSubscriptionService)
+        {
+            _db = db;
+            _pushSubscriptionService = pushSubscriptionService;
         }
 
         [Authorize(Policy = "EventOpenClose")]
@@ -74,17 +84,37 @@ namespace QRQueue.Controllers
         [HttpPut("again/{eventDisplayId}")]
         public async Task<IActionResult> Again(Guid eventDisplayId)
         {
-            var callingGroup = await _db.ParticipationGroups.FirstOrDefaultAsync(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling);
+            var callingGroup = await _db.ParticipationGroups
+                .Include(x => x.Tickets)
+                .FirstOrDefaultAsync(x =>
+                x.Event.DisplayId == eventDisplayId &&
+                x.Status == GroupStatus.Calling);
 
             if (callingGroup == null)
             {
                 return NotFound();
             }
-            else
+
+            if (callingGroup.Tickets.Count == 0)    //下のifでチケットがなかった時を想定.
             {
-                callingGroup.CallCount++;
-                callingGroup.CalledAt = DateTimeOffset.UtcNow;
+                return NotFound();
             }
+
+            var pattern = 0;    //この切り替え方法は仮の状態で、実際のものは後で実装.
+
+            if (pattern == 0)
+            {
+                await _pushSubscriptionService.SendLotteryPushAsync(callingGroup.Tickets[0]);    // 仮：0番目を代表者として扱う.
+            }
+            else if (pattern == 1)
+            {
+                foreach (Ticket ticket in callingGroup.Tickets)
+                    await _pushSubscriptionService.SendLotteryPushAsync(ticket);
+            }
+                      
+            callingGroup.CallCount++;
+            callingGroup.CalledAt = DateTimeOffset.UtcNow;
+            
 
             await _db.SaveChangesAsync();
 
@@ -93,8 +123,10 @@ namespace QRQueue.Controllers
 
         [Authorize(Policy = "CallView")]
         [HttpGet("queue/{eventDisplayId}")]
-        public async Task<IActionResult> Queue(Guid eventDisplayId)
+        public async Task<ActionResult<QueueView>> Queue(Guid eventDisplayId)
         {
+            var view = new QueueView();
+
             var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).ToListAsync();
 
             var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).ToListAsync();
@@ -103,36 +135,30 @@ namespace QRQueue.Controllers
 
             var matchingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Matching).ToListAsync();
 
-            var waitingQueue = waitingGroups.Select(x => new
+            view.WaitingGroup = waitingGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
                 Status = x.Status
             });
 
-            var callingQueue = callingGroups.Select(x => new
+            view.CallingGroup = callingGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
                 Status = x.Status
             });
 
-            var interruptedQueue = interruptedGroups.Select(x => new
+            view.InterruptedGroup = interruptedGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
                 Status = x.Status
             });
 
-            var poolPeople = matchingGroups.Sum(x => x.Tickets.Count(t => t.Status != TicketStatus.Cancelled));
+            view.PeoplePool = matchingGroups.Sum(x => x.Tickets.Count(t => t.Status != TicketStatus.Cancelled));
 
-            return Ok(new
-            {
-                waiting = waitingQueue,
-                calling = callingQueue,
-                interrupted = interruptedQueue,
-                poolPeople = poolPeople
-            });
+            return view;
         }
     }
 }

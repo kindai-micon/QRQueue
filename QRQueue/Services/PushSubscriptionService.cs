@@ -36,9 +36,9 @@ namespace QRQueue.Services
                 string payload = JsonSerializer.Serialize(new
                 {
                     title = "通知",
-                    body = ticket.Number + "番が当選しました!",
+                    body = "既に呼び出されています。受付までお越しください。",
                     url = "ticket/" + ticket.DisplayId,
-                    icon = "./favicon.png"
+                    icon = "./favicon.png"          //変更？
                 });
 
                 foreach (var subscription in subscriptions)
