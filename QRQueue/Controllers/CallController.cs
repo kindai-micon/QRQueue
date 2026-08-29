@@ -67,14 +67,9 @@ namespace QRQueue.Controllers
             {
                 return NoContent();
             }
-            else
-            {
-                waitingGroup.Status = GroupStatus.Calling;
-                await _db.SaveChangesAsync();
-            }
 
             waitingGroup.Status = GroupStatus.Calling;
-
+            await _pushSubscriptionService.SendNotifyTicketGroupAsync(waitingGroup.Tickets.ToList(), "呼び出し", "受付までお越しください。");
             await _db.SaveChangesAsync();
 
             return Ok();
@@ -99,25 +94,13 @@ namespace QRQueue.Controllers
             {
                 return NotFound();
             }
-
-            var pattern = 0;    //この切り替え方法は仮の状態で、実際のものは後で実装.
-
-            if (pattern == 0)
-            {
-                await _pushSubscriptionService.SendLotteryPushAsync(callingGroup.Tickets[0]);    // 仮：0番目を代表者として扱う.
-            }
-            else if (pattern == 1)
-            {
-                foreach (Ticket ticket in callingGroup.Tickets)
-                    await _pushSubscriptionService.SendLotteryPushAsync(ticket);
-            }
-                      
+            await _pushSubscriptionService.SendNotifyTicketGroupAsync(callingGroup.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
             callingGroup.CallCount++;
             callingGroup.CalledAt = DateTimeOffset.UtcNow;
             
 
             await _db.SaveChangesAsync();
-
+            
             return Ok();
         }
 
