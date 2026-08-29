@@ -23,11 +23,35 @@ namespace QRQueue.Controllers
                 .FirstOrDefaultAsync(t => t.DisplayId == guid);
             if (ticket == null)
                 return NotFound("チケットが見つかりません");
+
+            var group = ticket.ParticipationGroup;
+            var ev = group?.Event;
+
+            // 拡張 (§6.1): 現在の呼び出し番号と自分の順位 aheadCount(前面の Waiting グループ数)
+            long? currentCallingNumber = null;
+            int? aheadCount = null;
+            if (group != null && ev != null && group.Number > 0
+                && group.Status is GroupStatus.Waiting or GroupStatus.Calling)
+            {
+                currentCallingNumber = await _db.ParticipationGroups
+                    .Where(g => g.EventId == ev.Id && g.Status == GroupStatus.Calling)
+                    .OrderBy(g => g.CalledAt)
+                    .Select(g => (long?)g.Number)
+                    .FirstOrDefaultAsync();
+                aheadCount = await _db.ParticipationGroups.CountAsync(g =>
+                    g.EventId == ev.Id && g.Status == GroupStatus.Waiting && g.Number < group.Number);
+            }
+
             return Ok(new
             {
-                number = ticket.ParticipationGroup?.Number ?? ticket.Number,
-                status = ticket.ParticipationGroup?.Status.ToString() ?? ticket.Status.ToString(),
-                eventId = ticket.ParticipationGroup?.Event?.DisplayId
+                number = group?.Number ?? ticket.Number,
+                status = group?.Status.ToString() ?? ticket.Status.ToString(),
+                eventId = ev?.DisplayId,
+                // === 設計§6.1 拡張項目(電子券画面用) ===
+                eventName = ev?.Name,
+                groupNumber = group?.Number,
+                currentCallingNumber,
+                aheadCount
             });
         }
 

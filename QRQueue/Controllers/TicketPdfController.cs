@@ -5,9 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using QRQueue.Services;
+using QRQueue.Repositories;
 using Microsoft.Extensions.Configuration;
-using System.Net;
-using System.Net.Sockets;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
@@ -21,6 +20,8 @@ public class TicketPdfController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly IServer _server;
     private readonly ITicketIssuanceService _ticketIssuanceService;
+    private readonly IEventRepository _eventRepository;
+    private readonly IBaseUrlResolver _baseUrlResolver;
 
 
     public TicketPdfController(
@@ -29,7 +30,9 @@ public class TicketPdfController : ControllerBase
         ITicketPdfGenerator pdfGenerator,
         IConfiguration configuration,
         IServer server,
-        ITicketIssuanceService ticketIssuanceService)
+        ITicketIssuanceService ticketIssuanceService,
+        IEventRepository eventRepository,
+        IBaseUrlResolver baseUrlResolver)
     {
         _db = db;
         _userManager = userManager;
@@ -37,6 +40,8 @@ public class TicketPdfController : ControllerBase
         _configuration = configuration;
         _server = server;
         _ticketIssuanceService = ticketIssuanceService;
+        _eventRepository = eventRepository;
+        _baseUrlResolver = baseUrlResolver;
     }
     [Authorize(Policy = "TicketPublish")]
 
@@ -75,54 +80,8 @@ public class TicketPdfController : ControllerBase
 
         var tickets = result.Tickets;
 
-        // BaseURL の生成（設定 → 現在のリクエスト情報）
-        string baseUrl = _configuration["LotteryBaseUrl"];
-        if (string.IsNullOrEmpty(baseUrl))
-        {
-            var httpRequest = HttpContext.Request;
-
-            // appsettings.jsonのUseHttpsForQrCode設定を使用、未設定の場合はリクエストのスキームを使用
-            var useHttps = _configuration.GetValue<bool?>("UseHttpsForQrCode");
-            var scheme = useHttps.HasValue
-                ? (useHttps.Value ? "https" : "http")
-                : httpRequest.Scheme;
-
-            var host = httpRequest.Host.Host;
-
-            // localhostの場合はローカルネットワークIPアドレスを取得
-            if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-                host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
-            {
-                host = GetLocalIPAddress();
-            }
-
-            // 実際にアクセスされたポート番号を使用
-            int? port = httpRequest.Host.Port;
-
-            // ポート番号が取得できない場合は標準ポートを使用
-            if (!port.HasValue)
-            {
-                port = scheme == "https" ? 443 : 80;
-            }
-
-            // 標準ポート（HTTP:80, HTTPS:443）以外の場合はポート番号を含める
-            var portString = "";
-            if ((scheme == "https" && port != 443) ||
-                (scheme == "http" && port != 80))
-            {
-                portString = $":{port}";
-            }
-
-            baseUrl = $"{scheme}://{host}{portString}/ticket/";
-        }
-        else
-        {
-            if (!baseUrl.EndsWith("/"))
-            {
-                baseUrl += "/";
-            }
-            baseUrl += "ticket/";
-        }
+        // BaseURL の生成は共通化(設計§8。旧ロジックは BaseUrlResolver へ移譲)
+        string baseUrl = _baseUrlResolver.Resolve(Request) + "/ticket/";
 
         var ticketInfo = tickets.Select(t => new TicketInfo
         {
@@ -144,6 +103,41 @@ public class TicketPdfController : ControllerBase
         public int Count { get; set; }
         public Guid EventDisplayId { get; set; }
     }
+
+    /// <summary>
+    /// 参加登録QRの掲示用PDF(A4・1QR、設計§8)。読み取り先は {base}/entry/{eventDisplayId}。
+    /// 券ではなく掲示物で、これ自体は参加証にならない。
+    /// </summary>
+    [Authorize(Policy = "TicketPublish")]
+    [HttpGet("entry/{eventDisplayId}")]
+    public async Task<IActionResult> EntryQrPoster(Guid eventDisplayId)
+    {
+        var ev = await _eventRepository.FindByDisplayIdAsync(eventDisplayId);
+        if (ev == null)
+            return NotFound("イベントが見つかりません");
+
+        var url = $"{_baseUrlResolver.Resolve(Request)}/entry/{eventDisplayId}";
+        var bytes = _pdfGenerator.GenerateQrPosterPdf(ev.Name, "参加登録QR", url, "スマートフォンのカメラで読み取って参加登録してください");
+        return File(bytes, "application/pdf", $"参加登録QR_{ev.Name}.pdf");
+    }
+
+    /// <summary>
+    /// チェックインQRの掲示用PDF(A4・1QR、設計§8/§4.6)。受付に掲示し、
+    /// 呼び出し中グループの代表者が読み取ることで受付が確定する。読み取り先は {base}/checkin/{eventDisplayId}。
+    /// </summary>
+    [Authorize(Policy = "TicketPublish")]
+    [HttpGet("checkin/{eventDisplayId}")]
+    public async Task<IActionResult> CheckinQrPoster(Guid eventDisplayId)
+    {
+        var ev = await _eventRepository.FindByDisplayIdAsync(eventDisplayId);
+        if (ev == null)
+            return NotFound("イベントが見つかりません");
+
+        var url = $"{_baseUrlResolver.Resolve(Request)}/checkin/{eventDisplayId}";
+        var bytes = _pdfGenerator.GenerateQrPosterPdf(ev.Name, "チェックインQR", url, "そろったグループは代表者が受付で読み取ってください");
+        return File(bytes, "application/pdf", $"チェックインQR_{ev.Name}.pdf");
+    }
+
     [Authorize]
     [HttpGet("logs")]
     public IActionResult GetLogs([FromQuery] Guid eventDisplayId)
@@ -154,19 +148,6 @@ public class TicketPdfController : ControllerBase
             .ToList();
 
         return Ok(logs);
-    }
-
-    private string GetLocalIPAddress()
-    {
-        var host = Dns.GetHostEntry(Dns.GetHostName());
-        foreach (var ip in host.AddressList)
-        {
-            if (ip.AddressFamily == AddressFamily.InterNetwork)
-            {
-                return ip.ToString();
-            }
-        }
-        return "localhost"; // フォールバック
     }
 
 }

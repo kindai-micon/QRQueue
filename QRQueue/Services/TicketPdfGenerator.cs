@@ -1,17 +1,11 @@
-﻿using ZXing;
-using ZXing.Common;
-using QuestPDF.Fluent;
+﻿using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using QRQueue.Models;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Formats.Png;
 using QuestPDF.Helpers;
-using QRQueue.Services;
 
 namespace QRQueue.Services
 {
-    public class TicketPdfGenerator : ITicketPdfGenerator
+    public class TicketPdfGenerator(IQrCodeGenerator qrCodeGenerator) : ITicketPdfGenerator
     {
     public byte[] GenerateTicketsPdf(List<TicketInfo> tickets)
     {
@@ -69,6 +63,44 @@ namespace QRQueue.Services
         }).GeneratePdf();
     }
 
+    public byte[] GenerateQrPosterPdf(string eventName, string kindLabel, string url, string instruction)
+    {
+        // 掲示物は遠目から読み取るため高解像度で生成
+        var qrPng = qrCodeGenerator.GeneratePng(url, 1000, 1000);
+
+        return Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(40);
+                page.DefaultTextStyle(x => x.FontFamily("Noto Sans JP"));
+
+                page.Content().Column(col =>
+                {
+                    // タイトル(参加登録QR / チェックインQR)
+                    col.Item().AlignCenter().Text(kindLabel).FontSize(44).Bold();
+
+                    // イベント名
+                    col.Item().AlignCenter().PaddingTop(8)
+                        .Text(eventName).FontSize(26).SemiBold();
+
+                    // 大きな QR(中央)
+                    col.Item().PaddingTop(30).AlignCenter().Width(440)
+                        .Image(qrPng, ImageScaling.FitWidth);
+
+                    // 読み取り案内
+                    col.Item().AlignCenter().PaddingTop(28)
+                        .Text(instruction).FontSize(18).Medium();
+
+                    // 補足: フォールバック用の素 URL(券ではなく掲示物 §8)
+                    col.Item().AlignCenter().PaddingTop(14)
+                        .Text($"直接入力: {url}").FontSize(10).FontColor(Colors.Grey.Darken1);
+                });
+            });
+        }).GeneratePdf();
+    }
+
     private void RenderTicket(ColumnDescriptor ticketCol, TicketInfo ticket)
     {
         // タイトル
@@ -82,7 +114,7 @@ namespace QRQueue.Services
                 .FontFamily("Noto Sans JP").FontSize(16).Bold();
 
             row.ConstantItem(100).AlignRight().Height(80)
-                .Image(GenerateQrCode(ticket.Url), ImageScaling.FitHeight);
+                .Image(qrCodeGenerator.GeneratePng(ticket.Url), ImageScaling.FitHeight);
         });
 
         // 説明と注意
@@ -94,30 +126,6 @@ namespace QRQueue.Services
             // Powered by 表記
             bottom.Item().PaddingTop(10).AlignRight().Text("Powered by Micon club").FontSize(6).Italic().FontColor(Colors.Grey.Medium);
         });
-    }
-
-    private byte[] GenerateQrCode(string text)
-    {
-        var writer = new BarcodeWriterPixelData
-        {
-            Format = BarcodeFormat.QR_CODE,
-            Options = new EncodingOptions
-            {
-                Height = 150,
-                Width = 150,
-                Margin = 1
-            }
-        };
-
-        var pixelData = writer.Write(text);
-
-        using var image = SixLabors.ImageSharp.Image.LoadPixelData<Rgba32>(
-            pixelData.Pixels, pixelData.Width, pixelData.Height
-        );
-
-        using var ms = new MemoryStream();
-        image.Save(ms, new PngEncoder());
-        return ms.ToArray();
     }
     }
 }
