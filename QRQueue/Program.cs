@@ -50,6 +50,8 @@ namespace QRQueue
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
             builder.Services.AddSingleton<IQrCodeGenerator, QrCodeGenerator>();
+            // QR に埋める BaseURL 解決の共通化(設計§8)
+            builder.Services.AddSingleton<IBaseUrlResolver, BaseUrlResolver>();
             builder.Services.AddScoped<ITicketIssuanceService, TicketIssuanceService>();
             builder.Services.AddScoped<IGroupNumberIssuanceService, GroupNumberIssuanceService>();
             builder.Services.AddScoped<IQueueCallService, QueueCallService>();
