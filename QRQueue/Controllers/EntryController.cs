@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
@@ -13,6 +15,8 @@ namespace QRQueue.Controllers
     /// <summary>
     /// 参加者向けAPI(匿名・認証なし、設計§6.1)。
     /// 参加登録・電子券の復元・チェックイン・グループ参加。
+    /// 本人特定は body にトークンを持たせず、署名付き participantToken cookie(§5.2.1)から行う。
+    /// cookie の検証は `AuthenticateAsync("Participant")` で明示的に行う(既定スキームは Identity のまま)。
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
@@ -26,9 +30,9 @@ namespace QRQueue.Controllers
         IHubContext<QueueHub> hubContext,
         IConfiguration configuration) : ControllerBase
     {
-        public record JoinRequest(Guid EventDisplayId, string Mode, Guid ParticipantToken, bool Overwrite);
-        public record RestoreRequest(Guid EventDisplayId, Guid ParticipantToken);
-        public record GroupJoinRequest(string JoinToken, Guid ParticipantToken);
+        public record JoinRequest(Guid EventDisplayId, string Mode, bool Overwrite);
+        public record EventRequest(Guid EventDisplayId);
+        public record GroupJoinRequest(string JoinToken);
 
         /// <summary>参加登録画面の初期化(イベント名・受付状態・グループ上限)</summary>
         [HttpGet("{eventDisplayId}")]
@@ -51,8 +55,9 @@ namespace QRQueue.Controllers
         /// <summary>
         /// 参加登録(設計§4.1〜§4.3)。mode: solo=即キュー+採番 / pool=マッチングプールへ /
         /// group-create=グループ作成+代表者登録+採番。
-        /// participantToken が既存の有効な参加に一致する場合は 409
+        /// 参加者cookie が既存の有効な参加に一致する場合は 409
         /// (クライアントは overwrite フラグで上書き=§4.4、または既存券を復元)。
+        /// cookie 未保有(初回参加)は成功時に 1 回だけ participantToken cookie を発行する(§5.2.1)。
         /// </summary>
         [HttpPost("join")]
         public async Task<IActionResult> Join([FromBody] JoinRequest request)
@@ -67,8 +72,13 @@ namespace QRQueue.Controllers
                 return Conflict("受付中ではありません");
             }
 
+            var cookieToken = await ParticipantTokenAsync();
+            var isNewParticipant = cookieToken == null;
+            // 端末単位の不変識別子: cookie があればそれを継続、なければ新規発行(§5.2.1)
+            var participantToken = cookieToken ?? Guid.CreateVersion7();
+
             var existing = await ticketRepository.FindActiveByParticipantTokenAsync(
-                request.ParticipantToken, ev.DisplayId);
+                participantToken, ev.DisplayId);
             if (existing != null)
             {
                 if (!request.Overwrite)
@@ -88,8 +98,9 @@ namespace QRQueue.Controllers
 
             // 上書き時はチケットの付け替え(§4.4: DisplayId が変わらないため Push 購読も引き継がれる)
             var isNewTicket = existing == null;
-            var ticket = existing ?? new Ticket { ParticipantToken = request.ParticipantToken };
+            var ticket = existing ?? new Ticket { ParticipantToken = participantToken };
 
+            object result;
             switch (request.Mode)
             {
                 case "solo":
@@ -109,7 +120,8 @@ namespace QRQueue.Controllers
                     // 採番(Serializable トランザクション内でグループ・チケットも一緒に保存される §4.5)
                     await groupNumberIssuanceService.IssueNumberAsync(group);
                     await NotifyJoinedAsync(ev);
-                    return Ok(new { ticketDisplayId = ticket.DisplayId.ToString(), groupNumber = group.Number });
+                    result = new { ticketDisplayId = ticket.DisplayId.ToString(), groupNumber = group.Number };
+                    break;
                 }
                 case "pool":
                 {
@@ -136,13 +148,14 @@ namespace QRQueue.Controllers
                     }
                     await NotifyJoinedAsync(ev);
 
-                    return Ok(new
+                    result = new
                     {
                         ticketDisplayId = ticket.DisplayId.ToString(),
                         groupNumber = formed != null && ticket.ParticipationGroupId == formed.Id
                             ? formed.Number
                             : (long?)null
-                    });
+                    };
+                    break;
                 }
                 case "group-create":
                 {
@@ -163,21 +176,29 @@ namespace QRQueue.Controllers
                     // 代表者登録時点で採番(メンバーが揃うのを待たない §4.3)
                     await groupNumberIssuanceService.IssueNumberAsync(group);
                     await NotifyJoinedAsync(ev);
-                    return Ok(new
+                    result = new
                     {
                         ticketDisplayId = ticket.DisplayId.ToString(),
                         groupNumber = group.Number,
                         joinToken
-                    });
+                    };
+                    break;
                 }
                 default:
                     return BadRequest("mode は solo / pool / group-create のいずれかを指定してください");
             }
+
+            // 初回参加の成功時のみ cookie を発行(§5.2.1「発行は1回きり」)
+            if (isNewParticipant)
+            {
+                await IssueParticipantCookieAsync(participantToken);
+            }
+            return Ok(result);
         }
 
-        /// <summary>同一端末から電子券を復元(localStorage の participantToken → URL喪失対策 §6.1)</summary>
+        /// <summary>同一端末から電子券を復元(参加者cookie → URL喪失対策 §6.1)</summary>
         [HttpPost("restore")]
-        public async Task<IActionResult> Restore([FromBody] RestoreRequest request)
+        public async Task<IActionResult> Restore([FromBody] EventRequest request)
         {
             var ev = await eventRepository.FindByDisplayIdAsync(request.EventDisplayId);
             if (ev == null)
@@ -185,8 +206,14 @@ namespace QRQueue.Controllers
                 return NotFound("イベントが見つかりません");
             }
 
+            var participantToken = await ParticipantTokenAsync();
+            if (participantToken == null)
+            {
+                return NotFound("参加者cookieがありません");
+            }
+
             var ticket = await ticketRepository.FindActiveByParticipantTokenAsync(
-                request.ParticipantToken, ev.DisplayId);
+                participantToken.Value, ev.DisplayId);
             if (ticket == null)
             {
                 return NotFound("参加登録が見つかりません");
@@ -195,13 +222,13 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
-        /// チェックイン(受付の確定、設計§4.6)。participantToken で特定した参加者の属するグループが
+        /// チェックイン(受付の確定、設計§4.6)。参加者cookie で特定した参加者の属するグループが
         /// Calling なら Completed に確定して AutoNext を発火。Interrupted なら同様に完了し、
         /// 次の呼び出しに割り込んで処理対象にする。Waiting/Matching なら 409。
         /// 代表者でない場合も 409。
         /// </summary>
         [HttpPost("checkin")]
-        public async Task<IActionResult> Checkin([FromBody] RestoreRequest request)
+        public async Task<IActionResult> Checkin([FromBody] EventRequest request)
         {
             var ev = await eventRepository.FindByDisplayIdAsync(request.EventDisplayId);
             if (ev == null)
@@ -209,8 +236,14 @@ namespace QRQueue.Controllers
                 return NotFound("イベントが見つかりません");
             }
 
+            var participantToken = await ParticipantTokenAsync();
+            if (participantToken == null)
+            {
+                return NotFound("参加者cookieがありません");
+            }
+
             var ticket = await ticketRepository.FindActiveByParticipantTokenAsync(
-                request.ParticipantToken, ev.DisplayId);
+                participantToken.Value, ev.DisplayId);
             if (ticket == null || ticket.ParticipationGroupId == null)
             {
                 return NotFound("このイベントでの参加登録が見つかりません");
@@ -277,7 +310,7 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
-        /// グループ参加(§4.3)。既にどこかに参加済みなら上書き(旧グループ離脱、§4.4)。
+        /// グループ参加(§4.3)。参加者cookie で既にどこかに参加中なら上書き(旧グループ離脱、§4.4)。
         /// 満員・joinToken無効・呼び出し済みは 409。
         /// </summary>
         [HttpPost("group/join")]
@@ -308,8 +341,12 @@ namespace QRQueue.Controllers
                 return Conflict("受付終了しました");
             }
 
+            var cookieToken = await ParticipantTokenAsync();
+            var isNewParticipant = cookieToken == null;
+            var participantToken = cookieToken ?? Guid.CreateVersion7();
+
             var existing = await ticketRepository.FindActiveByParticipantTokenAsync(
-                request.ParticipantToken, ev.DisplayId);
+                participantToken, ev.DisplayId);
             if (existing != null && existing.ParticipationGroupId == group.Id)
             {
                 // 既にこのグループのメンバー → 冪等に現在の券を返す
@@ -333,13 +370,18 @@ namespace QRQueue.Controllers
                 ticket = new Ticket
                 {
                     ParticipationGroupId = group.Id,
-                    ParticipantToken = request.ParticipantToken
+                    ParticipantToken = participantToken
                 };
                 await ticketRepository.AddAsync(ticket);
             }
             await ticketRepository.SaveChangesAsync();
             await NotifyJoinedAsync(ev);
 
+            // 初回参加の成功時のみ cookie を発行(§5.2.1「発行は1回きり」)
+            if (isNewParticipant)
+            {
+                await IssueParticipantCookieAsync(participantToken);
+            }
             return Ok(new { ticketDisplayId = ticket.DisplayId.ToString(), groupNumber = group.Number });
         }
 
@@ -355,6 +397,38 @@ namespace QRQueue.Controllers
 
             var url = $"{ResolveBaseUrl()}/join/{group.JoinToken}";
             return File(qrCodeGenerator.GeneratePng(url, 300, 300), "image/png");
+        }
+
+        /// <summary>
+        /// 参加者cookie(§5.2.1)から participantToken を取得。
+        /// 既定スキームは Identity のため、`AuthenticateAsync("Participant")` で明示検証する
+        /// (OnValidatePrincipal で DB 照合済み = 失効トークンは null 扱い)。
+        /// </summary>
+        private async Task<Guid?> ParticipantTokenAsync()
+        {
+            var auth = await HttpContext.AuthenticateAsync("Participant");
+            if (!auth.Succeeded)
+            {
+                return null;
+            }
+            return Guid.TryParse(auth.Principal?.FindFirstValue("participantToken"), out var token)
+                ? token
+                : (Guid?)null;
+        }
+
+        /// <summary>初回参加成功時に 1 回だけ署名付き participantToken cookie を発行(§5.2.1)</summary>
+        private async Task IssueParticipantCookieAsync(Guid token)
+        {
+            var identity = new ClaimsIdentity(
+                authenticationType: "Participant",
+                nameType: ClaimTypes.Name,
+                roleType: ClaimTypes.Role);
+            identity.AddClaim(new Claim(ClaimTypes.Name, token.ToString("N")));
+            identity.AddClaim(new Claim("participantToken", token.ToString()));
+            await HttpContext.SignInAsync(
+                "Participant",
+                new ClaimsPrincipal(identity),
+                new AuthenticationProperties { IsPersistent = true });
         }
 
         /// <summary>

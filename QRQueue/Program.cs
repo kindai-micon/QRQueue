@@ -10,6 +10,7 @@ using QRQueue.Services;
 using QRQueue.Repositories;
 using QRQueue.Repositories.Implementations;
 using System.Text.Json.Serialization;
+using System.Security.Claims;
 using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
 using QuestPDF.Infrastructure;
@@ -125,6 +126,34 @@ namespace QRQueue
                 option.DefaultSignInScheme = IdentityConstants.ExternalScheme;
             })
             .AddIdentityCookies();
+
+            // 参加者向け 署名付き participantToken cookie(設計§5.2.1)。既定は Identity のまま別スキーム
+            builder.Services.AddAuthentication()
+            .AddCookie("Participant", options =>
+            {
+                options.Cookie.Name = "participant";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.ExpireTimeSpan = TimeSpan.FromDays(90);
+                options.SlidingExpiration = false;
+                options.Events.OnValidatePrincipal = async context =>
+                {
+                    // participantToken claim ⇔ DB 照合(失効=有効な参加が無い cookie は拒否)
+                    var claimValue = context.Principal?.FindFirstValue("participantToken");
+                    if (!Guid.TryParse(claimValue, out var token))
+                    {
+                        context.RejectPrincipal();
+                        return;
+                    }
+                    var tickets = context.HttpContext.RequestServices
+                        .GetRequiredService<ITicketRepository>();
+                    if (!await tickets.HasActiveTicketAsync(token))
+                    {
+                        context.RejectPrincipal();
+                    }
+                };
+            });
 
             builder.Services.AddIdentityCore<ApplicationUser>(o =>
             {

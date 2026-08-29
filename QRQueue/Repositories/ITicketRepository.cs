@@ -18,6 +18,12 @@ namespace QRQueue.Repositories
         /// </summary>
         Task<Ticket?> FindActiveByParticipantTokenAsync(Guid participantToken, Guid eventId);
 
+        /// <summary>
+        /// participantToken に一致する有効な参加(Registered かつ所属グループが生きている)が
+        /// 全イベント中に存在するか。署名付き cookie の検証用(設計§5.2.1)。
+        /// </summary>
+        Task<bool> HasActiveTicketAsync(Guid participantToken);
+
         /// <summary>イベントのチケット一覧(番号順)</summary>
         Task<List<Ticket>> GetByEventAsync(Guid eventId);
 

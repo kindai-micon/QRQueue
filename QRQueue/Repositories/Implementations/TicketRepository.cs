@@ -36,6 +36,15 @@ namespace QRQueue.Repositories.Implementations
                 .ToListAsync();
         }
 
+        public Task<bool> HasActiveTicketAsync(Guid participantToken)
+        {
+            return applicationDbContext.Tickets.AnyAsync(x =>
+                x.ParticipantToken == participantToken
+                && x.Status == TicketStatus.Registered
+                && (x.ParticipationGroupId == null
+                    || x.ParticipationGroup.Status != GroupStatus.Cancelled));
+        }
+
         public async Task AddAsync(Ticket ticket)
         {
             await applicationDbContext.Tickets.AddAsync(ticket);
