@@ -16,11 +16,6 @@ namespace QRQueue.Controllers
         private readonly ApplicationDbContext _db;
         private readonly PushSubscriptionService _pushSubscriptionService;  //追加.
 
-        /*public CallController(ApplicationDbContext db)
-        {
-            _db = db;
-        }*/
-
         public CallController(
                  ApplicationDbContext db,
                  PushSubscriptionService pushSubscriptionService)
