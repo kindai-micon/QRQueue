@@ -130,7 +130,8 @@ public class QueueCallService(
 
         foreach (var ticket in group.Tickets.Where(t => t.Status != TicketStatus.Cancelled))
         {
-            await pushSubscriptionService.SendCallPushAsync(ticket);
+            // 呼び出し通知に転用(設計§7)。master 側のメソッド名 SendLotteryPushAsync を使用
+            await pushSubscriptionService.SendLotteryPushAsync(ticket);
         }
     }
 
