@@ -16,11 +16,7 @@ public interface IQueueCallService
     /// </summary>
     Task<ParticipationGroup?> CallNextAsync(Event ev);
 
-    /// <summary>
-    /// 再呼び出し。現在 Calling のグループの CallCount++ と表示再強調(Push 再送)。
-    /// 呼び出し中のグループがなければ null を返す。
-    /// </summary>
-    Task<ParticipationGroup?> CallAgainAsync(Event ev);
+    // ※「再呼び出し(CallAgain)」は管理向け(CallController)側の責務のため、ここでは提供しない(§6.2)
 
     /// <summary>
     /// 方式②のグループ成立(設計§4.2)。プールの参加順先頭 memberCount 人で1グループを成立させ、
@@ -67,22 +63,6 @@ public class QueueCallService(
         }
 
         target.Status = GroupStatus.Calling;
-        target.CalledAt = DateTimeOffset.UtcNow;
-        await groupRepository.SaveChangesAsync();
-
-        await AnnounceAsync(ev, target);
-        return target;
-    }
-
-    public async Task<ParticipationGroup?> CallAgainAsync(Event ev)
-    {
-        var target = (await groupRepository.GetCallingAsync(ev.Id)).FirstOrDefault();
-        if (target == null)
-        {
-            return null;
-        }
-
-        target.CallCount++;
         target.CalledAt = DateTimeOffset.UtcNow;
         await groupRepository.SaveChangesAsync();
 
