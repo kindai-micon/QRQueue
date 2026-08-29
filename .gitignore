@@ -364,3 +364,5 @@ FodyWeavers.xsd
 
 # VAPID keys (auto-generated)
 vapid_keys.json
+# Claude Code worktrees
+.claude/
