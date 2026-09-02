@@ -48,7 +48,7 @@ async function handleJoin(mode: string) {
     });
 
     if (response.status === 409) {
-        const isJson = response.get("context-type")?.include("application/json");
+        const isJson = response.headers.get("context-type")?.includes("application/json");
         const data = isJson ? await response.json() : { message: await response.text()} ;
         if ( data.ticketDisplayId ) 
         {
@@ -157,31 +157,12 @@ async function handleJoinOverwrite(mode: string) {
                 <div>
                     <h3>既に参加登録されています</h3>
 
-                    <p>どうしますか？</p>
-
                         <button
                             onClick={() => {
                             window.location.href = `/ticket/${existingTicketId}`;
                         }}
                         >
                             既存のチケットを見る
-                        </button>
-
-                        <button
-                            onClick={() => {
-                            setShowExistingMenu(false);
-                            handleJoinOverwrite(selectedMode);
-                        }}
-                        >
-                            上書きして新しく参加する
-                        </button>
-
-                        <button
-                            onClick={() => {
-                            setShowExistingMenu(false);
-                        }}
-                        >
-                            キャンセル
                         </button>
                 </div>
            )}
