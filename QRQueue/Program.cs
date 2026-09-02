@@ -180,6 +180,7 @@ namespace QRQueue
             app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
             app.MapGet("/event/{eventid}/tickets", (string eventid) => Results.Extensions.Jsx("Event/Tickets", new { eventId = eventid }, RenderMode.ServerAndClient));
             app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
+            app.MapGet("/entry/{eventid}", (string eventid) => Results.Extensions.Jsx("Entry/Index", new { eventId = eventid }, RenderMode.ServerAndClient));       //追加.
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();

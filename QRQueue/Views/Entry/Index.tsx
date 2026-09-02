@@ -1,0 +1,240 @@
+﻿import Layout from "@/Shared/Layout";
+import { useState, useEffect } from "preact/hooks";
+
+type Model = {    
+    eventId: string;     
+};
+
+type EventInfo = {
+    eventName: string;
+    status: string;
+    isOpen: boolean;
+    maxGroupSize: number;
+};
+
+export default function Index({ model }: { model: Model }) {
+const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);             //イベント情報を入れる場所.
+const [showExistingMenu, setShowExistingMenu] = useState(false);                //3択の画面を表示するか.
+const [existingTicketId, setExistingTicketId] = useState<string | null>(null);  //既存チケットのID.
+const [selectedMode, setSelectedMode] = useState<string>("");                   //最初に押した参加方法（solo など）.
+const [joinToken, setJoinToken] = useState<string | null>(null);                //グループ参加用の番号.
+const [groupNumber, setGroupNumber] = useState<number | null>(null);            //作成されたグループ番号.
+const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    //作成された自分のチケット番号.
+
+useEffect(() => {
+    async function loadEventInfo() {
+        const response = await fetch(`/api/entry/${model.eventId}`);
+        const data = await response.json();
+
+        setEventInfo(data);
+    }
+
+    loadEventInfo();
+}, [model.eventId]);
+
+
+
+async function handleJoin(mode: string) {
+    const response = await fetch("/api/entry/join", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            eventDisplayId: model.eventId,
+            mode: mode,
+            overwrite: false,
+        }),
+    });
+
+    if (response.status === 409) {
+        const data = await response.json();
+
+        setExistingTicketId(data.ticketDisplayId);
+        setSelectedMode(mode);
+        setShowExistingMenu(true);
+
+        return;
+    }
+    
+
+    if (!response.ok) {
+        const errorMessage = await response.text();
+        alert(errorMessage);
+        return;
+    }
+
+    const data = await response.json();
+
+    if (mode === "group-create") {
+        setJoinToken(data.joinToken);
+        setGroupNumber(data.groupNumber);
+        setCreatedTicketId(data.ticketDisplayId);
+        return;
+    }
+
+    window.location.href = `/ticket/${data.ticketDisplayId}`;
+
+}
+
+async function handleRestore() {
+    const response = await fetch("/api/entry/restore", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            eventDisplayId: model.eventId,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorMessage = await response.text();
+        alert(errorMessage);
+        return;
+    }
+
+    const data = await response.json();
+
+    window.location.href = `/ticket/${data.ticketDisplayId}`;
+}
+
+async function handleJoinOverwrite(mode: string) {
+    
+    const response = await fetch("/api/entry/join", {
+        
+        method: "POST",
+        
+        headers: {            
+            "Content-Type": "application/json",    
+        },
+        body: JSON.stringify({
+            eventDisplayId: model.eventId,
+            mode: mode,
+            overwrite: true,
+        }),
+    });
+    
+    if (!response.ok) {
+        const errorMessage = await response.text();
+        alert(errorMessage);
+        return;
+    }
+    
+    const data = await response.json();
+
+    if (mode === "group-create") {
+        setJoinToken(data.joinToken);
+        setGroupNumber(data.groupNumber);
+        setCreatedTicketId(data.ticketDisplayId);
+        return;
+    }
+
+    window.location.href = `/ticket/${data.ticketDisplayId}`;
+
+}
+
+    return (
+        <Layout chrome="header">
+        <div>
+            
+            <h1>イベント参加</h1>
+
+            {eventInfo && (
+                <h2>{eventInfo.eventName}</h2>
+            )}
+
+            <p>イベントID：{model.eventId}</p>
+
+            <h2>参加方法を選択してください</h2>
+
+            {showExistingMenu && (
+                <div>
+                    <h3>既に参加登録されています</h3>
+
+                    <p>どうしますか？</p>
+
+                        <button
+                            onClick={() => {
+                            window.location.href = `/ticket/${existingTicketId}`;
+                        }}
+                        >
+                            既存のチケットを見る
+                        </button>
+
+                        <button
+                            onClick={() => {
+                            setShowExistingMenu(false);
+                            handleJoinOverwrite(selectedMode);
+                        }}
+                        >
+                            上書きして新しく参加する
+                        </button>
+
+                        <button
+                            onClick={() => {
+                            setShowExistingMenu(false);
+                        }}
+                        >
+                            キャンセル
+                        </button>
+                </div>
+           )}
+
+           {joinToken && (
+                <div>
+                    <h2>グループを作成しました</h2>
+
+                    <p>グループ番号：{groupNumber}</p>
+
+                    <p>
+                        一緒に参加する人に、以下のQRコードを読み取ってもらってください。
+                    </p>
+
+                    <img
+                        src={`/api/entry/group/${joinToken}/qrcode`}
+                        alt="グループ参加用QRコード"
+                    />
+
+                    <br />
+
+                    <button
+                        onClick={() => {
+                            window.location.href = `/ticket/${createdTicketId}`;
+                        }}
+                    >
+                        チケットを見る
+                    </button>
+                </div>
+            )}
+
+
+            {eventInfo && !eventInfo.isOpen && (
+                <p>現在、受付を行っていません。</p>
+            )}
+
+            <button
+                disabled={!eventInfo?.isOpen}
+                onClick={() => handleJoin("solo")}
+            >
+                1人で参加
+            </button>
+
+            <button
+                disabled={!eventInfo?.isOpen}
+                onClick={() => handleJoin("pool")}
+            >
+                おまかせグループ
+            </button>
+
+            <button
+                disabled={!eventInfo?.isOpen}
+                onClick={() => handleJoin("group-create")}
+            >
+                グループを作成
+            </button>
+
+        </div>
+        </Layout>
+    ); 
+}
