@@ -1,0 +1,35 @@
+/* QRQueue/Views/Event/Call.tsx 用スタイル(呼び出しコンソール) */
+
+.call-container { padding: 2rem; max-width: 900px; margin: 0 auto; }
+.call-denied {
+    background: #ffebee; color: #c62828; padding: 1rem;
+    border-radius: 8px; margin-bottom: 1rem;
+}
+.call-status-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1.5rem; }
+.call-reception { font-weight: 700; padding: 0.3rem 0.9rem; border-radius: 50px; font-size: 0.9rem; }
+.call-reception-open { background: #e8f5e9; color: #2e7d32; }
+.call-reception-closed { background: #eceff1; color: #546e7a; }
+
+.call-actions { display: flex; gap: 1rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+.call-next {
+    flex: 2; padding: 1.4rem; font-size: 1.6rem; font-weight: 800;
+    border: none; border-radius: 12px; cursor: pointer; color: white;
+    background: linear-gradient(135deg, #3a7d7c 0%, #2d6360 100%);
+}
+.call-again {
+    flex: 1; padding: 1.4rem; font-size: 1.2rem; font-weight: 700;
+    border: 2px solid #3a7d7c; border-radius: 12px; cursor: pointer;
+    background: white; color: #3a7d7c;
+}
+.call-next:disabled, .call-again:disabled { opacity: 0.5; cursor: default; }
+.call-hint { font-size: 0.8rem; color: #888; margin-bottom: 1rem; }
+.call-message {
+    padding: 0.8rem 1rem; border-radius: 8px; background: #e8f5e9;
+    color: #2e7d32; margin-bottom: 1rem; font-weight: 600;
+}
+.call-message-error { background: #fff3e0; color: #e65100; }
+.call-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.call-panel { background: white; border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+.call-panel h2 { font-size: 1rem; margin: 0 0 0.8rem; color: #555; }
+.call-pool { font-size: 2rem; font-weight: 800; color: #3a7d7c; }
+@media (max-width: 700px) { .call-panels { grid-template-columns: 1fr; } }

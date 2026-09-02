@@ -1,0 +1,39 @@
+/* QRQueue/Views/Entry/Join.tsx 用スタイル */
+
+.join-container {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 1.5rem 1rem; min-height: 100vh;
+    background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%);
+}
+.join-loading { color: #666; margin-top: 3rem; }
+.join-card {
+    background: #ffffff; border-radius: 12px; padding: 2rem 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: 100%; max-width: 420px; text-align: center;
+}
+.join-card-error h1 { font-size: 2.5rem; margin: 0 0 0.5rem; }
+.join-kind {
+    display: inline-block; background: #3a7d7c; color: white;
+    padding: 0.3rem 0.9rem; border-radius: 50px; font-size: 0.85rem; margin-bottom: 1rem;
+}
+.join-number-label { color: #666; font-size: 0.9rem; }
+.join-number {
+    font-size: 3rem; font-weight: bold; letter-spacing: 2px; color: #333;
+    font-family: 'Courier New', monospace; margin: 0.3rem 0 1rem;
+}
+.join-members { color: #555; margin-bottom: 1.2rem; }
+.join-btn {
+    width: 100%; padding: 1rem; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #3a7d7c 0%, #2d6360 100%);
+    color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;
+}
+.join-btn:disabled { opacity: 0.6; }
+.join-closed {
+    padding: 1rem; border-radius: 12px; background: #fff3e0;
+    color: #e65100; font-weight: 600;
+}
+.join-error {
+    padding: 0.8rem; border-radius: 8px; background: #ffebee;
+    color: #c62828; font-size: 0.9rem; margin-bottom: 1rem;
+}
+.join-note { font-size: 0.8rem; color: #888; margin-top: 1.2rem; }

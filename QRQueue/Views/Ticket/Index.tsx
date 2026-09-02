@@ -6,6 +6,14 @@ type TicketStatus = {
     number: number;
     status: string;
     eventId: string | null;
+    // 設計§6.1 拡張項目(PR #7)
+    eventName?: string | null;
+    groupNumber?: number | null;
+    currentCallingNumber?: number | null;
+    aheadCount?: number | null;
+    // 電子券画面用 接着項目(§9.1)
+    joinToken?: string | null;
+    isRepresentative?: boolean;
 };
 
 type Model = {
@@ -16,17 +24,29 @@ const STATUS_LABELS: Record<string, string> = {
     Waiting: "呼び出し待ち",
     Calling: "呼び出し中",
     Interrupted: "割り込み待ち",
-    Completed: "受付済み ✓",
-    Matching: "マッチング中",
+    Completed: "受付完了 ✓",
+    Matching: "グループ編成中",
     Cancelled: "無効",
+    Registered: "参加登録済み",
 };
 
-// SvelteKit routes/ticket/[ticketid]/+page.svelte から移行
+// 電子券画面(参加証そのもの、設計§9.1 /ticket/[ticketid] 改造)
 export default function Index({ model }: { model: Model }) {
     const [ticketData, setTicketData] = useState<TicketStatus | null>(null);
     const [loaded, setLoaded] = useState(false);
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
+    const [homeHintHidden, setHomeHintHidden] = useState(true);
+
+    // 「ホーム画面に追加」導線(§9.1):  standalone で開いていないときだけ案内
+    useEffect(() => {
+        const standalone =
+            (navigator as any).standalone === true ||
+            window.matchMedia?.("(display-mode: standalone)").matches;
+        if (!standalone && !localStorage.getItem("hide-home-hint")) {
+            setHomeHintHidden(false);
+        }
+    }, []);
 
     useEffect(() => {
         try {
@@ -112,10 +132,17 @@ export default function Index({ model }: { model: Model }) {
         let connection: HubConnection | null = null;
         let disposed = false;
         let joinedEventId: string | null = null;
+        let poll: number | undefined;
 
         async function load() {
             try {
                 const res = await fetch(`/api/ticket/${model.ticketId}`);
+                if (!res.ok) {
+                    if (res.status === 404 && !disposed) {
+                        setTicketData(null);
+                    }
+                    return;
+                }
                 const data: TicketStatus = await res.json();
                 if (disposed) return;
                 setTicketData(data);
@@ -142,11 +169,10 @@ export default function Index({ model }: { model: Model }) {
                     .withAutomaticReconnect()
                     .build();
 
+                // 新イベント名(設計§7): UpdateStatus(参加変動) / QueueChanged(キュー変動) / Called(呼び出し)
                 connection.on("UpdateStatus", load);
-                connection.on("SetTarget", load);
-                connection.on("SubmitLottery", load);
-                connection.on("ViewStop", load);
-                connection.on("ExchangeStop", load);
+                connection.on("QueueChanged", load);
+                connection.on("Called", load);
                 connection.onreconnected(async () => {
                     if (joinedEventId) {
                         await connection?.invoke("SetEvent", joinedEventId);
@@ -159,24 +185,29 @@ export default function Index({ model }: { model: Model }) {
                     await connection.stop();
                     return;
                 }
-                await load();
             } catch (err) {
                 console.error("SignalR connection setup error:", err);
-                await load();
-            } finally {
-                if (!disposed) {
-                    setLoaded(true);
-                }
+            }
+            await load();
+            if (!disposed) {
+                setLoaded(true);
+                // 通知を取りこぼした場合のバックストップ(15秒)
+                poll = window.setInterval(load, 15000);
             }
         })();
 
         return () => {
             disposed = true;
+            if (poll) window.clearInterval(poll);
             connection?.stop().catch((err) => console.error("Error stopping SignalR connection:", err));
         };
     }, [model.ticketId]);
 
     const statusLabel = ticketData ? STATUS_LABELS[ticketData.status] ?? ticketData.status : null;
+    const displayNumber = ticketData ? (ticketData.groupNumber ?? ticketData.number) : null;
+    const isCalling = ticketData?.status === "Calling";
+    const isInterrupted = ticketData?.status === "Interrupted";
+    const isWaiting = ticketData?.status === "Waiting";
 
     return (
         <Layout chrome="header">
@@ -191,13 +222,16 @@ export default function Index({ model }: { model: Model }) {
                             呼び出し通知{notification ? "登録済み✔" : "登録"}
                         </button>
                         <div class="header">
-                            <h1>チケット確認</h1>
-                            <p>QRコード読み込み完了</p>
+                            <h1>{ticketData.eventName ?? "電子券"}</h1>
+                            <p>あなたの参加証(この画面が唯一の参加証です)</p>
                         </div>
 
                         <div class="ticket-number-box">
                             <div class="ticket-number-label">呼び出し番号</div>
-                            <div class="ticket-number">{ticketData.number}</div>
+                            <div class="ticket-number">{displayNumber}</div>
+                            {ticketData.status === "Matching" && (
+                                <div class="ticket-number-sub">グループが揃い次第、番号が確定します</div>
+                            )}
                         </div>
 
                         <div class="ticket-info">
@@ -205,11 +239,58 @@ export default function Index({ model }: { model: Model }) {
                             <div class="status-badge">{statusLabel}</div>
                         </div>
 
-                        {ticketData.status === "Calling" && (
+                        {isWaiting && (
+                            <div class="queue-info">
+                                {ticketData.currentCallingNumber != null && (
+                                    <div class="queue-row">
+                                        <span class="queue-label">いま呼び出し中</span>
+                                        <span class="queue-value">{ticketData.currentCallingNumber} 番</span>
+                                    </div>
+                                )}
+                                {ticketData.aheadCount != null && (
+                                    <div class="queue-row">
+                                        <span class="queue-label">あなたの前を待っている組</span>
+                                        <span class="queue-value">{ticketData.aheadCount} 組</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {isCalling && ticketData.isRepresentative && (
                             <div class="alert-box alert-calling">
                                 <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>🔔</div>
                                 <div>呼び出されました！</div>
-                                <div class="alert-sub">代表者の方は受付のチェックインQRを読み取ってください</div>
+                                <div class="alert-sub">
+                                    メンバーがそろうと受付のチェックインQRを読み取ってください。
+                                </div>
+                                {ticketData.eventId && (
+                                    <a class="alert-link" href={`/checkin/${ticketData.eventId}`}>
+                                        チェックイン画面へ(受付掲示QRの代わりにここからでも可)
+                                    </a>
+                                )}
+                            </div>
+                        )}
+                        {isCalling && !ticketData.isRepresentative && (
+                            <div class="alert-box alert-calling">
+                                <div>呼び出されました！</div>
+                                <div class="alert-sub">
+                                    受付では<strong>代表者</strong>がチェックインQRを読み取ります。代表者と一緒に向かってください。
+                                </div>
+                            </div>
+                        )}
+
+                        {isInterrupted && (
+                            <div class="alert-box alert-interrupted">
+                                <div>割り込み待ち(退避)中です</div>
+                                <div class="alert-sub">
+                                    メンバーがそろったら代表者が受付のチェックインQRを読み取ると、
+                                    次の呼び出しに<strong>割り込んで</strong>優先的に処理されます。
+                                </div>
+                                {ticketData.eventId && ticketData.isRepresentative && (
+                                    <a class="alert-link" href={`/checkin/${ticketData.eventId}`}>
+                                        チェックイン画面へ
+                                    </a>
+                                )}
                             </div>
                         )}
 
@@ -218,6 +299,40 @@ export default function Index({ model }: { model: Model }) {
                                 <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>✓</div>
                                 <div>受付完了</div>
                                 <div class="alert-sub">受付が完了しました</div>
+                            </div>
+                        )}
+
+                        {ticketData.joinToken && (
+                            <div class="group-qr">
+                                <div class="heading">グループ参加QR</div>
+                                <p class="group-qr-desc">
+                                    メンバーはこのQRを読み取ると <strong>{displayNumber}</strong> 番のグループに参加できます。
+                                </p>
+                                <img
+                                    src={`/api/entry/group/${ticketData.joinToken}/qrcode`}
+                                    alt="グループ参加QR"
+                                    width={260}
+                                    height={260}
+                                />
+                            </div>
+                        )}
+
+                        {!homeHintHidden && (
+                            <div class="home-hint">
+                                <div>
+                                    <strong>📱 後で見るには</strong>
+                                    ：ブラウザメニューの「ホーム画面に追加」でこの電子券を再訪できます
+                                    (URLを紛失しても、この端末なら自動で復元されます)。
+                                </div>
+                                <button
+                                    class="home-hint-close"
+                                    onClick={() => {
+                                        localStorage.setItem("hide-home-hint", "1");
+                                        setHomeHintHidden(true);
+                                    }}
+                                >
+                                    ✕ 閉じる
+                                </button>
                             </div>
                         )}
                     </div>
@@ -242,4 +357,3 @@ export default function Index({ model }: { model: Model }) {
         </Layout>
     );
 }
-

@@ -212,8 +212,14 @@ namespace QRQueue
             app.MapGet("/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
             app.MapGet("/event/{eventid}", (string eventid) => Results.Extensions.Jsx("Event/Detail", new { eventId = eventid }, RenderMode.ServerAndClient));
             app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/tickets", (string eventid) => Results.Extensions.Jsx("Event/Tickets", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}/call", (string eventid) => Results.Extensions.Jsx("Event/Call", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/event/{eventid}/queue", (string eventid) => Results.Extensions.Jsx("Event/Queue", new { eventId = eventid }, RenderMode.ServerAndClient));
             app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
+            // 参加者向け匿名ページ(設計§9.1。/entry/{id} は別担当のため本ブランチでは不作)
+            app.MapGet("/join/{token}", (string token) => Results.Extensions.Jsx("Entry/Join", new { joinToken = token }, RenderMode.ServerAndClient));
+            app.MapGet("/checkin/{eventid}", (string eventid) => Results.Extensions.Jsx("Entry/Checkin", new { eventDisplayId = eventid }, RenderMode.ServerAndClient));
+            // 投影用(旧 /view 置換)
+            app.MapGet("/display/{eventid}", (string eventid) => Results.Extensions.Jsx("Display/Index", new { eventId = eventid }, RenderMode.ServerAndClient));
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();

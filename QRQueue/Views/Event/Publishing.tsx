@@ -1,90 +1,52 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 
-type LogEntry = {
-    issuer: string;
-    date: string;
-    count: number;
-    startNumber: number;
-    endNumber: number;
-};
-
 type Model = {
-    eventId: string;
+    eventId: string; // eventDisplayId
 };
 
-// SvelteKit routes/event/[eventid]/publishing/+page.svelte から移行
+type EventInfo = {
+    eventName: string;
+    status: string;
+    isOpen: boolean;
+    maxGroupSize: number;
+};
+
+// 掲示物発行画面(設計§9.1 /event/[eventid]/publishing 改造)。
+// 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(§8 / PR#9)。
 export default function Publishing({ model }: { model: Model }) {
-    const [eventName, setEventName] = useState("");
-    const [issueCount, setIssueCount] = useState(10);
-    const [totalIssued, setTotalIssued] = useState(0);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [ev, setEv] = useState<EventInfo | null>(null);
 
     useEffect(() => {
         (async () => {
-            const res = await fetch(`/api/event/Name?id=${model.eventId}`);
-            setEventName(await res.text());
-
-            await refreshLogs();
+            try {
+                const res = await fetch(`/api/entry/${model.eventId}`);
+                if (res.ok) setEv(await res.json());
+            } catch (err) {
+                console.error("イベント情報の取得に失敗:", err);
+            }
         })();
     }, [model.eventId]);
 
-    async function loadLogs(): Promise<LogEntry[]> {
-        const logRes = await fetch(`/api/pdf/logs?eventDisplayId=${model.eventId}`);
-        if (!logRes.ok) {
-            console.error("ログの取得に失敗しました");
-            return [];
-        }
-        const data = await logRes.json();
-        return data.map((entry: any) => ({
-            issuer: entry.issuerName,
-            date: new Date(entry.issuedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }),
-            count: entry.count,
-            startNumber: entry.startNumber,
-            endNumber: entry.endNumber,
-        }));
-    }
-
-    async function refreshLogs() {
-        const loaded = await loadLogs();
-        setLogs(loaded);
-        setTotalIssued(loaded.reduce((sum, log) => sum + log.count, 0));
-    }
-
-    async function generateTickets(e: Event) {
-        e.preventDefault();
-        setIsGenerating(true);
+    async function download(path: string, filename: string) {
         try {
-            const response = await fetch("/api/pdf/generate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    count: issueCount,
-                    eventDisplayId: model.eventId,
-                }),
-            });
-
-            if (!response.ok) {
-                alert("PDFの生成に失敗しました");
+            const res = await fetch(path);
+            if (!res.ok) {
+                alert("PDFの発行に失敗しました(TicketPublish 権限が必要です)");
                 return;
             }
-
-            const blob = await response.blob();
+            const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = "チケット.pdf";
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-
-            await refreshLogs();
+            window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error("エラー:", err);
+            console.error("PDF発行エラー:", err);
             alert("予期せぬエラーが発生しました");
-        } finally {
-            setIsGenerating(false);
         }
     }
 
@@ -92,47 +54,42 @@ export default function Publishing({ model }: { model: Model }) {
         <Layout>
             <link rel="stylesheet" href="/css/event-publishing.css" />
             <div class="publishing-container">
-                <div class="page-title">イベント: {eventName}</div>
+                <div class="page-title">イベント: {ev?.eventName ?? "..."}</div>
 
-                <form class="section issue-form" onSubmit={generateTickets}>
-                    <div class="label">発行枚数を入力：</div>
-                    <input
-                        type="number"
-                        min="1"
-                        value={issueCount}
-                        onInput={(e) => setIssueCount(Number(e.currentTarget.value))}
-                    />
-                    <button type="submit" class="btn-primary" disabled={isGenerating}>
-                        {isGenerating ? "発行中..." : "チケットを発行"}
-                    </button>
-                </form>
+                <p class="publishing-note">
+                    印刷して会場に掲示してください。QRは<strong>掲示物であり参加証ではありません</strong>(§8)。
+                </p>
 
-                <div class="section">
-                    <div class="label">合計発行枚数: {totalIssued}</div>
-                    <div class="label">発行ログ:</div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>発行者</th>
-                                <th>発行日時</th>
-                                <th>枚数</th>
-                                <th>番号範囲</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {logs.map((log, i) => (
-                                <tr key={i}>
-                                    <td>{log.issuer}</td>
-                                    <td>{log.date}</td>
-                                    <td>{log.count}</td>
-                                    <td>No.{log.startNumber} ～ No.{log.endNumber}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div class="publishing-cards">
+                    <section class="publishing-card">
+                        <h2>参加登録QR</h2>
+                        <p class="publishing-desc">
+                            読み取ると参加登録ページ(<code>/entry/{model.eventId}</code>)へ。
+                            すべての参加者はまずここから登録します。
+                        </p>
+                        <button
+                            class="btn-primary"
+                            onClick={() => download(`/api/pdf/entry/${model.eventId}`, "参加登録QR.pdf")}
+                        >
+                            A4掲示PDFを発行
+                        </button>
+                    </section>
+
+                    <section class="publishing-card">
+                        <h2>チェックインQR</h2>
+                        <p class="publishing-desc">
+                            受付に掲示。呼び出されたグループの<strong>代表者</strong>が読むと受付が確定し、
+                            次の呼び出しが自動で進みます(§4.6)。
+                        </p>
+                        <button
+                            class="btn-primary"
+                            onClick={() => download(`/api/pdf/checkin/${model.eventId}`, "チェックインQR.pdf")}
+                        >
+                            A4掲示PDFを発行
+                        </button>
+                    </section>
                 </div>
             </div>
         </Layout>
     );
 }
-
