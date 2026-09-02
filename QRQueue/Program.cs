@@ -17,6 +17,9 @@ using QuestPDF.Drawing;
 using JsxCore;
 using JsxCore.Hosting;
 using JsxCore.Mvc;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http.HttpResults;
 namespace QRQueue
 {
     public class Program
@@ -180,7 +183,21 @@ namespace QRQueue
             app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
             app.MapGet("/event/{eventid}/tickets", (string eventid) => Results.Extensions.Jsx("Event/Tickets", new { eventId = eventid }, RenderMode.ServerAndClient));
             app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
-            app.MapGet("/entry/{eventid}", (string eventid) => Results.Extensions.Jsx("Entry/Index", new { eventId = eventid }, RenderMode.ServerAndClient));       //追加.
+            app.MapGet("/entry/{eventid}", async (string eventid, HttpContext http, ITicketRepository tickets) =>
+            {
+                if (Guid.TryParse(eventid, out var eventDisplayId) &&
+                  (await http.AuthenticateAsync("Participant")).Principal is { } principal &&
+                  Guid.TryParse (principal.FindFirstValue("participantToken"), out var participantToken))
+                {
+                    var ticket = await tickets.FindActiveByParticipantTokenAsync(participantToken, eventDisplayId);
+                    if(ticket != null)
+                    {
+                        return Results.Redirect("/ticket/" + ticket.DisplayId.ToString());
+                    }
+                    
+                }
+                return Results.Extensions.Jsx("Entry/Index", new { eventId = eventid }, RenderMode.ServerAndClient);
+            });
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();
