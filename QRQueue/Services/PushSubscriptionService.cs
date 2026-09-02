@@ -11,7 +11,7 @@ namespace QRQueue.Services
         IVapidService vapidService,
         IServiceScopeFactory scopeFactory) : IPushSubscriptionService
     {
-        public async Task SendLotteryPushAsync(Ticket ticket)
+        public async Task SendNotifyTicketGroupAsync(List<Ticket> tickets, string title, string message)
         {
             try
             {
@@ -28,18 +28,10 @@ namespace QRQueue.Services
                 );
 
                 var webPushClient = new WebPushClient();
-
+                var displayids = tickets.Select(t => t.DisplayId).ToList();
                 var subscriptions = await db.PushSubscriptions
-                    .Where(s => s.DisplayId == ticket.DisplayId)
+                    .Where(s => displayids.Contains(s.DisplayId))
                     .ToListAsync();
-
-                string payload = JsonSerializer.Serialize(new
-                {
-                    title = "通知",
-                    body = ticket.Number + "番が当選しました!",
-                    url = "ticket/" + ticket.DisplayId,
-                    icon = "./favicon.png"
-                });
 
                 foreach (var subscription in subscriptions)
                 {
@@ -48,6 +40,13 @@ namespace QRQueue.Services
                         subscription.P256dh,
                         subscription.Auth
                     );
+                    string payload = JsonSerializer.Serialize(new
+                    {
+                        title = title,
+                        body = message,
+                        url = "ticket/" + subscription.DisplayId,
+                        icon = "./favicon.png"          //変更？
+                    });
 
                     try
                     {
@@ -69,6 +68,10 @@ namespace QRQueue.Services
             {
                 Console.WriteLine($"Push batch error: {ex}");
             }
+        }
+        public async Task SendNotifyTicketAsync(Ticket ticket, string title, string message)
+        {
+            await SendNotifyTicketGroupAsync(new List<Ticket>() { ticket }, title, message);
         }
     }
 }

@@ -18,6 +18,9 @@ using QuestPDF.Drawing;
 using JsxCore;
 using JsxCore.Hosting;
 using JsxCore.Mvc;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http.HttpResults;
 namespace QRQueue
 {
     public class Program
@@ -220,6 +223,21 @@ namespace QRQueue
             app.MapGet("/checkin/{eventid}", (string eventid) => Results.Extensions.Jsx("Entry/Checkin", new { eventDisplayId = eventid }, RenderMode.ServerAndClient));
             // 投影用(旧 /view 置換)
             app.MapGet("/display/{eventid}", (string eventid) => Results.Extensions.Jsx("Display/Index", new { eventId = eventid }, RenderMode.ServerAndClient));
+            app.MapGet("/entry/{eventid}", async (string eventid, HttpContext http, ITicketRepository tickets) =>
+            {
+                if (Guid.TryParse(eventid, out var eventDisplayId) &&
+                  (await http.AuthenticateAsync("Participant")).Principal is { } principal &&
+                  Guid.TryParse (principal.FindFirstValue("participantToken"), out var participantToken))
+                {
+                    var ticket = await tickets.FindActiveByParticipantTokenAsync(participantToken, eventDisplayId);
+                    if(ticket != null)
+                    {
+                        return Results.Redirect("/ticket/" + ticket.DisplayId.ToString());
+                    }
+                    
+                }
+                return Results.Extensions.Jsx("Entry/Index", new { eventId = eventid }, RenderMode.ServerAndClient);
+            });
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();
