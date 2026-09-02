@@ -48,11 +48,16 @@ async function handleJoin(mode: string) {
     });
 
     if (response.status === 409) {
-        const data = await response.json();
-
-        setExistingTicketId(data.ticketDisplayId);
-        setSelectedMode(mode);
-        setShowExistingMenu(true);
+        const isJson = response.get("context-type")?.include("application/json");
+        const data = isJson ? await response.json() : { message: await response.text()} ;
+        if ( data.ticketDisplayId ) 
+        {
+            setExistingTicketId(data.ticketDisplayId);
+            setSelectedMode(mode);
+            setShowExistingMenu(true);
+        } else {
+            alert(data.message ??  "参加登録できませんでした" );
+        }
 
         return;
     }
