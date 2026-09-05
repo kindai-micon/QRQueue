@@ -1,28 +1,16 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-import { readErrorMessage } from "@/Shared/queue";
+import { readErrorMessage, type CheckinResult, type EventInfoView, type RestoreResult } from "@/Shared/api";
 
 type Model = {
     eventDisplayId: string;
-};
-
-type EventInfo = {
-    eventName: string;
-    status: string;
-    isOpen: boolean;
-    maxGroupSize: number;
-};
-
-type CheckinResult = {
-    groupNumber: number;
-    status: string;
 };
 
 // チェックインQRの飛び先(設計§9.1 /checkin/[eventid] §4.6)。
 // 参加者cookie を添えて POST /api/entry/checkin を呼ぶ。
 // 失敗時は「まだ確定できません」を表示し、グループの状態は一切変化しない。
 export default function Checkin({ model }: { model: Model }) {
-    const [ev, setEv] = useState<EventInfo | null>(null);
+    const [ev, setEv] = useState<EventInfoView | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [result, setResult] = useState<CheckinResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -34,7 +22,8 @@ export default function Checkin({ model }: { model: Model }) {
             try {
                 const res = await fetch(`/api/entry/${model.eventDisplayId}`);
                 if (res.ok) {
-                    setEv(await res.json());
+                    const data: EventInfoView = await res.json();
+                    setEv(data);
                 } else {
                     setNotFound(true);
                 }
@@ -65,7 +54,7 @@ export default function Checkin({ model }: { model: Model }) {
                         body: JSON.stringify({ eventDisplayId: model.eventDisplayId }),
                     });
                     if (restore.ok) {
-                        const r = await restore.json();
+                        const r: RestoreResult = await restore.json();
                         setTicketUrl(`/ticket/${r.ticketDisplayId}`);
                         setTimeout(() => {
                             window.location.href = `/ticket/${r.ticketDisplayId}`;
@@ -86,7 +75,7 @@ export default function Checkin({ model }: { model: Model }) {
     }
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title="チェックイン | QRQueue">
             <link rel="stylesheet" href="/css/checkin.css" />
             <div class="checkin-container">
                 {notFound && (

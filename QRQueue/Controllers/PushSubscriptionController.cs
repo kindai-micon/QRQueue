@@ -25,14 +25,25 @@ namespace QRQueue.Controllers
             [FromRoute] Guid guid,
             [FromBody] PushSubscriptionDTO subscriptionDTO)
         {
-            var subscription = new PushSubscription
+            // 同じチケットで再登録されたら上書きし、重複通知を防ぐ
+            var existing = await _db.PushSubscriptions
+                .FirstOrDefaultAsync(s => s.DisplayId == guid);
+            if (existing != null)
             {
-                DisplayId = guid,
-                Endpoint = subscriptionDTO.Endpoint,
-                P256dh = subscriptionDTO.Keys.P256dh,
-                Auth = subscriptionDTO.Keys.Auth
-            };
-            _db.PushSubscriptions.Add(subscription);
+                existing.Endpoint = subscriptionDTO.Endpoint;
+                existing.P256dh = subscriptionDTO.Keys.P256dh;
+                existing.Auth = subscriptionDTO.Keys.Auth;
+            }
+            else
+            {
+                _db.PushSubscriptions.Add(new PushSubscription
+                {
+                    DisplayId = guid,
+                    Endpoint = subscriptionDTO.Endpoint,
+                    P256dh = subscriptionDTO.Keys.P256dh,
+                    Auth = subscriptionDTO.Keys.Auth
+                });
+            }
 
             await _db.SaveChangesAsync();
 
@@ -40,14 +51,14 @@ namespace QRQueue.Controllers
         }
 
         [HttpGet("vapid-public-key")]
-        public async Task<IActionResult> GetVapidPublicKey()
+        public async Task<ActionResult<VapidPublicKeyView>> GetVapidPublicKey()
         {
             var keys = await _service.GetOrCreateKeysAsync();
             if (keys.PublicKey != null && keys.PrivateKey != null)
             {
-                return Ok(new { publicKey = keys.PublicKey});
+                return new VapidPublicKeyView(keys.PublicKey);
             }
-            return StatusCode(500, new { error = "Push notifications not configured" });
+            return StatusCode(500, new ApiMessage("Push notifications not configured"));
         }
     }
 }

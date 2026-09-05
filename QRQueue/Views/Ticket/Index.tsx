@@ -1,38 +1,15 @@
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
-
-type TicketStatus = {
-    number: number;
-    status: string;
-    eventId: string | null;
-    // 設計§6.1 拡張項目(PR #7)
-    eventName?: string | null;
-    groupNumber?: number | null;
-    currentCallingNumber?: number | null;
-    aheadCount?: number | null;
-    // 電子券画面用 接着項目(§9.1)
-    joinToken?: string | null;
-    isRepresentative?: boolean;
-};
+import { TICKET_STATUS_LABEL, type TicketView, type VapidPublicKeyView } from "@/Shared/api";
 
 type Model = {
     ticketId: string;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-    Waiting: "呼び出し待ち",
-    Calling: "呼び出し中",
-    Interrupted: "割り込み待ち",
-    Completed: "受付完了 ✓",
-    Matching: "グループ編成中",
-    Cancelled: "無効",
-    Registered: "参加登録済み",
-};
-
 // 電子券画面(参加証そのもの、設計§9.1 /ticket/[ticketid] 改造)
 export default function Index({ model }: { model: Model }) {
-    const [ticketData, setTicketData] = useState<TicketStatus | null>(null);
+    const [ticketData, setTicketData] = useState<TicketView | null>(null);
     const [loaded, setLoaded] = useState(false);
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
@@ -76,7 +53,7 @@ export default function Index({ model }: { model: Model }) {
         if (!res.ok) {
             throw new Error("Failed to get VAPID key");
         }
-        const data = await res.json();
+        const data: VapidPublicKeyView = await res.json();
         return data.publicKey;
     }
 
@@ -143,7 +120,7 @@ export default function Index({ model }: { model: Model }) {
                     }
                     return;
                 }
-                const data: TicketStatus = await res.json();
+                const data: TicketView = await res.json();
                 if (disposed) return;
                 setTicketData(data);
 
@@ -203,14 +180,14 @@ export default function Index({ model }: { model: Model }) {
         };
     }, [model.ticketId]);
 
-    const statusLabel = ticketData ? STATUS_LABELS[ticketData.status] ?? ticketData.status : null;
+    const statusLabel = ticketData ? TICKET_STATUS_LABEL[ticketData.status] ?? ticketData.status : null;
     const displayNumber = ticketData ? (ticketData.groupNumber ?? ticketData.number) : null;
     const isCalling = ticketData?.status === "Calling";
     const isInterrupted = ticketData?.status === "Interrupted";
     const isWaiting = ticketData?.status === "Waiting";
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title={ticketData?.eventName ? `${ticketData.eventName} 電子券 | QRQueue` : "電子券 | QRQueue"}>
             <link rel="stylesheet" href="/css/ticket.css" />
             {loaded ? (
                 ticketData ? (

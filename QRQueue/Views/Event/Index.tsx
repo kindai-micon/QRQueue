@@ -1,14 +1,10 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-
-type EventItem = {
-    name: string;
-    id: string;
-};
+import type { EventListItem } from "@/Shared/api";
 
 // SvelteKit routes/event/+page.svelte から移行
 export default function Index() {
-    const [events, setEvents] = useState<EventItem[] | null>(null);
+    const [events, setEvents] = useState<EventListItem[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [newName, setNewName] = useState("");
     const [createError, setCreateError] = useState<string | null>(null);
@@ -18,7 +14,7 @@ export default function Index() {
         try {
             const res = await fetch("/api/event/List");
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            setEvents(await res.json());
+            setEvents(await res.json() as EventListItem[]);
             setError(null);
         } catch (err) {
             setError(`イベント一覧の取得に失敗しました: ${(err as Error).message}`);
@@ -56,7 +52,7 @@ export default function Index() {
     }, []);
 
     return (
-        <Layout>
+        <Layout title="イベント管理 | QRQueue">
             <link rel="stylesheet" href="/css/event.css" />
             <div class="container">
                 <h1>イベント一覧</h1>

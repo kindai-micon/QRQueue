@@ -21,12 +21,12 @@ namespace QRQueue.Controllers
             var role = await roleManager.FindByNameAsync(roleName);
             if (role != null)
             {
-                return BadRequest("Role already exists");
+                return BadRequest(new ApiMessage("Role already exists"));
             }
             var result = await roleManager.CreateAsync(new ApplicationRole(roleName));
             if (!result.Succeeded)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(result.Errors.ToApiMessage());
             }
             return Ok();
         }
@@ -49,30 +49,24 @@ namespace QRQueue.Controllers
             applicationDbContext.RemoveRange(role.Authorities);
             if (!result.Succeeded)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(result.Errors.ToApiMessage());
             }
-            
-            return Ok();
-        }
 
-        [HttpGet]
-        public async Task<IActionResult> Get()
-        {
-            return Ok(applicationDbContext.Authorities.ToArray());
+            return Ok();
         }
 
         [Authorize]
         [HttpGet(nameof(RoleList))]
-        public async Task<IActionResult> RoleList()
+        public async Task<ActionResult<List<SendRole>>> RoleList()
         {
             var roles = await roleManager.Roles.Include(x => x.Authorities)
                 .Select(x=>new SendRole(x))
                 .ToListAsync();
-            return Ok(roles);
+            return roles;
         }
         [Authorize]
         [HttpGet(nameof(GetRole))]
-        public async Task<IActionResult> GetRole([FromQuery] string roleName)
+        public async Task<ActionResult<SendRole>> GetRole([FromQuery] string roleName)
         {
             var role = await roleManager.Roles.Where(x=>x.Name == roleName).Include(x=>x.Authorities).FirstOrDefaultAsync();
             if (role == null)
@@ -80,15 +74,15 @@ namespace QRQueue.Controllers
                 return NotFound();
             }
             SendRole sendRole = new SendRole(role);
-            return Ok(sendRole);
+            return sendRole;
         }
 
         [Authorize]
         [HttpGet(nameof(AuthorityList))]
-        public async Task<IActionResult> AuthorityList()
+        public async Task<ActionResult<List<string>>> AuthorityList()
         {
-            var authority = authorityScanService.Authority;
-            return Ok(authority);
+            var authority = authorityScanService.Authority.ToList();
+            return authority;
         }
         [Authorize(Policy = "RoleManagement")]
         [HttpPost(nameof(AddAuthority))]

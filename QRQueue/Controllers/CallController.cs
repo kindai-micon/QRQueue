@@ -14,13 +14,16 @@ namespace QRQueue.Controllers
     public class CallController/*(ApplicationDbContext applicationDbContext)*/ : ControllerBase
     {
         private readonly ApplicationDbContext _db;
-        private readonly PushSubscriptionService _pushSubscriptionService;  //追加.
+        private readonly IQueueCallService _queueCallService;
+        private readonly IPushSubscriptionService _pushSubscriptionService;  //再呼び出し(Again)用.
 
         public CallController(
                  ApplicationDbContext db,
-                 PushSubscriptionService pushSubscriptionService)
+                 IQueueCallService queueCallService,
+                 IPushSubscriptionService pushSubscriptionService)
         {
             _db = db;
+            _queueCallService = queueCallService;
             _pushSubscriptionService = pushSubscriptionService;
         }
 
@@ -56,16 +59,19 @@ namespace QRQueue.Controllers
         [HttpPut("next/{eventDisplayId}")]
         public async Task<IActionResult> Next(Guid eventDisplayId)
         {
-            var waitingGroup = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).FirstOrDefaultAsync();
+            // 「次を呼ぶ」は QueueCallService に一本化(§4.6)。
+            // 呼出中の未チェックイングループの割込pool退避・方式②プール自動確定・通知もここで行う。
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
 
-            if (waitingGroup == null)
+            var called = await _queueCallService.CallNextAsync(ev);
+            if (called == null)
             {
                 return NoContent();
             }
-
-            waitingGroup.Status = GroupStatus.Calling;
-            await _pushSubscriptionService.SendNotifyTicketGroupAsync(waitingGroup.Tickets.ToList(), "呼び出し", "受付までお越しください。");
-            await _db.SaveChangesAsync();
 
             return Ok();
         }
@@ -105,11 +111,12 @@ namespace QRQueue.Controllers
         {
             var view = new QueueView();
 
-            var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).ToListAsync();
+            // 先頭が「次に呼ぶグループ」になるよう番号順に固定(§4.5 先着順)
+            var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).ToListAsync();
 
-            var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).ToListAsync();
+            var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).OrderBy(x => x.CalledAt).ToListAsync();
 
-            var interruptedGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Interrupted).ToListAsync();
+            var interruptedGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Interrupted).OrderBy(x => x.Number).ToListAsync();
 
             var matchingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Matching).ToListAsync();
 

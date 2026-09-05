@@ -17,7 +17,7 @@ export default function Detail({ model }: { model: Model }) {
     }, [model.eventId]);
 
     return (
-        <Layout>
+        <Layout title={eventName ? `イベント: ${eventName} | QRQueue` : "イベント | QRQueue"}>
             <link rel="stylesheet" href="/css/event-detail.css" />
             <div class="detail-container">
                 <div class="page-title">イベント: {eventName}</div>

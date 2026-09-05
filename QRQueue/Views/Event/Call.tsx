@@ -1,24 +1,17 @@
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
-import { groupStatusLabel, readErrorMessage, type GroupView, type QueueView } from "@/Shared/queue";
+import { groupStatusLabel, readErrorMessage, type EventInfoView, type GroupView, type QueueView } from "@/Shared/api";
 
 type Model = {
     eventId: string; // eventDisplayId
-};
-
-type EventInfo = {
-    eventName: string;
-    status: string;
-    isOpen: boolean;
-    maxGroupSize: number;
 };
 
 // 呼び出しコンソール(設計§9.1 /event/[eventid]/call、旧 execute 置換)。
 // 操作は「受付開閉」「次を呼ぶ」「再呼び出し」のみ。完了は参加者のチェックインで確定するため
 // 完了ボタンは置かない(§4.6)。
 export default function Call({ model }: { model: Model }) {
-    const [ev, setEv] = useState<EventInfo | null>(null);
+    const [ev, setEv] = useState<EventInfoView | null>(null);
     const [queue, setQueue] = useState<QueueView | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -28,7 +21,7 @@ export default function Call({ model }: { model: Model }) {
     async function loadEvent() {
         try {
             const res = await fetch(`/api/entry/${model.eventId}`);
-            if (res.ok) setEv(await res.json());
+            if (res.ok) setEv(await res.json() as EventInfoView);
         } catch (err) {
             console.error("イベント情報の取得に失敗:", err);
         }
@@ -141,7 +134,7 @@ export default function Call({ model }: { model: Model }) {
     );
 
     return (
-        <Layout>
+        <Layout title="呼び出しコンソール | QRQueue">
             <link rel="stylesheet" href="/css/call.css" />
             <div class="call-container">
                 <div class="page-title">呼び出しコンソール: {ev?.eventName ?? "..."}</div>

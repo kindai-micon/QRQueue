@@ -45,7 +45,7 @@ export default function Index() {
     }
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title="ログイン | QRQueue">
             <link rel="stylesheet" href="/css/login.css" />
             <div class="login-container">
                 <h2>ログイン</h2>

@@ -1,15 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-
-type SendRole = {
-    name: string;
-    authorities: { name: string }[];
-};
-
-type SendUser = {
-    userName: string;
-    roles: SendRole[];
-};
+import type { SendRole, SendUser } from "@/Shared/api";
 
 type Model = {
     username: string;
@@ -36,11 +27,11 @@ export default function Detail({ model }: { model: Model }) {
             try {
                 const res = await fetch(`/api/user/UserInfo?username=${encodeURIComponent(model.username)}`);
                 if (!res.ok) throw new Error(`Error ${res.status}`);
-                setUser(await res.json());
+                setUser(await res.json() as SendUser);
 
                 const rolesRes = await fetch("/api/Role/RoleList");
                 if (!rolesRes.ok) throw new Error(`ロール一覧取得失敗: ${rolesRes.status}`);
-                setAvailableRoles(await rolesRes.json());
+                setAvailableRoles(await rolesRes.json() as SendRole[]);
             } catch (e) {
                 setError((e as Error).message);
             } finally {
@@ -98,7 +89,7 @@ export default function Detail({ model }: { model: Model }) {
     }
 
     return (
-        <Layout>
+        <Layout title="ユーザー詳細 | QRQueue">
             <link rel="stylesheet" href="/css/users-detail.css" />
             {showModal && roleToRemove && (
                 <div class="modal-overlay">
