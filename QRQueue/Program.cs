@@ -17,9 +17,6 @@ using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
 using JsxCore;
 using JsxCore.Hosting;
-using JsxCore.Mvc;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Http.HttpResults;
 namespace QRQueue
 {
     public class Program
@@ -208,40 +205,6 @@ namespace QRQueue
 
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
-            // JsxCore View ルーティング(SvelteKit から全面移行)
-            app.MapGet("/", () => Results.Extensions.Jsx("Home/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/initial", () => Results.Extensions.Jsx("Initial/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/login", () => Results.Extensions.Jsx("Login/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/roles", () => Results.Extensions.Jsx("Roles/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/users", () => Results.Extensions.Jsx("Users/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/users/{username}", (string username) => Results.Extensions.Jsx("Users/Detail", new { username }, RenderMode.ServerAndClient));
-            app.MapGet("/admin/delete-data", () => Results.Extensions.Jsx("Admin/DeleteData", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}", (string eventid) => Results.Extensions.Jsx("Event/Detail", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/call", (string eventid) => Results.Extensions.Jsx("Event/Call", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/queue", (string eventid) => Results.Extensions.Jsx("Event/Queue", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
-            // 参加者向け匿名ページ(設計§9.1。/entry/{id} は別担当のため本ブランチでは不作)
-            app.MapGet("/join/{token}", (string token) => Results.Extensions.Jsx("Entry/Join", new { joinToken = token }, RenderMode.ServerAndClient));
-            app.MapGet("/checkin/{eventid}", (string eventid) => Results.Extensions.Jsx("Entry/Checkin", new { eventDisplayId = eventid }, RenderMode.ServerAndClient));
-            // 投影用(旧 /view 置換)
-            app.MapGet("/display/{eventid}", (string eventid) => Results.Extensions.Jsx("Display/Index", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/entry/{eventid}", async (string eventid, HttpContext http, ITicketRepository tickets) =>
-            {
-                if (Guid.TryParse(eventid, out var eventDisplayId) &&
-                  (await http.AuthenticateAsync("Participant")).Principal is { } principal &&
-                  Guid.TryParse (principal.FindFirstValue("participantToken"), out var participantToken))
-                {
-                    var ticket = await tickets.FindActiveByParticipantTokenAsync(participantToken, eventDisplayId);
-                    if(ticket != null)
-                    {
-                        return Results.Redirect("/ticket/" + ticket.DisplayId.ToString());
-                    }
-                    
-                }
-                return Results.Extensions.Jsx("Entry/Index", new { eventId = eventid }, RenderMode.ServerAndClient);
-            });
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();
