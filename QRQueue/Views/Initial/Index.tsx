@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import { readErrorMessage } from "@/Shared/api";
 
 // SvelteKit routes/initial/+page.svelte から移行
 export default function Index() {
@@ -15,8 +16,8 @@ export default function Index() {
             try {
                 const response = await fetch("/api/user/HasUser", { method: "GET" });
                 if (response.ok) {
-                    const data = await response.json();
-                    if (data) {
+                    const hasUser: boolean = await response.json();
+                    if (hasUser) {
                         window.location.href = "/login";
                     } else {
                         // パスコードをバックエンドのコンソールに出力
@@ -57,9 +58,8 @@ export default function Index() {
         if (response.ok) {
             window.location.href = "/login";
         } else if (response.status === 400) {
-            // IdentityError[] を読み取る
-            const errors: { code: string; description: string }[] = await response.json();
-            setError(errors.map((e) => e.description).join("\n"));
+            // 統一エラー形式 ApiMessage { message }
+            setError(await readErrorMessage(response));
         } else {
             setError("不明なエラーが発生しました。");
             console.error(await response.text());
@@ -67,7 +67,7 @@ export default function Index() {
     }
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title="初期ユーザー登録 | QRQueue">
             <link rel="stylesheet" href="/css/initial.css" />
             <div class="form-container">
                 <h1>初期ユーザー作成</h1>

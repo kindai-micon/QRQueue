@@ -1,19 +1,13 @@
 ﻿import Layout from "@/Shared/Layout";
 import { useState, useEffect } from "preact/hooks";
+import { readErrorMessage, type ApiMessage, type EventInfoView, type JoinConflict, type JoinResult, type RestoreResult } from "@/Shared/api";
 
-type Model = {    
-    eventId: string;     
-};
-
-type EventInfo = {
-    eventName: string;
-    status: string;
-    isOpen: boolean;
-    maxGroupSize: number;
+type Model = {
+    eventId: string;
 };
 
 export default function Index({ model }: { model: Model }) {
-const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);             //イベント情報を入れる場所.
+const [eventInfo, setEventInfo] = useState<EventInfoView | null>(null);         //イベント情報を入れる場所.
 const [showExistingMenu, setShowExistingMenu] = useState(false);                //3択の画面を表示するか.
 const [existingTicketId, setExistingTicketId] = useState<string | null>(null);  //既存チケットのID.
 const [selectedMode, setSelectedMode] = useState<string>("");                   //最初に押した参加方法（solo など）.
@@ -24,7 +18,8 @@ const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    
 useEffect(() => {
     async function loadEventInfo() {
         const response = await fetch(`/api/entry/${model.eventId}`);
-        const data = await response.json();
+        if (!response.ok) return;
+        const data: EventInfoView = await response.json();
 
         setEventInfo(data);
     }
@@ -48,9 +43,9 @@ async function handleJoin(mode: string) {
     });
 
     if (response.status === 409) {
-        const isJson = response.headers.get("context-type")?.includes("application/json");
-        const data = isJson ? await response.json() : { message: await response.text()} ;
-        if ( data.ticketDisplayId ) 
+        const isJson = response.headers.get("content-type")?.includes("application/json");
+        const data: JoinConflict | ApiMessage = isJson ? await response.json() : { message: await response.text() };
+        if ("ticketDisplayId" in data && data.ticketDisplayId)
         {
             setExistingTicketId(data.ticketDisplayId);
             setSelectedMode(mode);
@@ -61,18 +56,17 @@ async function handleJoin(mode: string) {
 
         return;
     }
-    
+
 
     if (!response.ok) {
-        const errorMessage = await response.text();
-        alert(errorMessage);
+        alert(await readErrorMessage(response));
         return;
     }
 
-    const data = await response.json();
+    const data: JoinResult = await response.json();
 
     if (mode === "group-create") {
-        setJoinToken(data.joinToken);
+        setJoinToken(data.joinToken ?? null);
         setGroupNumber(data.groupNumber);
         setCreatedTicketId(data.ticketDisplayId);
         return;
@@ -94,24 +88,23 @@ async function handleRestore() {
     });
 
     if (!response.ok) {
-        const errorMessage = await response.text();
-        alert(errorMessage);
+        alert(await readErrorMessage(response));
         return;
     }
 
-    const data = await response.json();
+    const data: RestoreResult = await response.json();
 
     window.location.href = `/ticket/${data.ticketDisplayId}`;
 }
 
 async function handleJoinOverwrite(mode: string) {
-    
+
     const response = await fetch("/api/entry/join", {
-        
+
         method: "POST",
-        
-        headers: {            
-            "Content-Type": "application/json",    
+
+        headers: {
+            "Content-Type": "application/json",
         },
         body: JSON.stringify({
             eventDisplayId: model.eventId,
@@ -119,17 +112,16 @@ async function handleJoinOverwrite(mode: string) {
             overwrite: true,
         }),
     });
-    
+
     if (!response.ok) {
-        const errorMessage = await response.text();
-        alert(errorMessage);
+        alert(await readErrorMessage(response));
         return;
     }
-    
-    const data = await response.json();
+
+    const data: JoinResult = await response.json();
 
     if (mode === "group-create") {
-        setJoinToken(data.joinToken);
+        setJoinToken(data.joinToken ?? null);
         setGroupNumber(data.groupNumber);
         setCreatedTicketId(data.ticketDisplayId);
         return;
@@ -140,7 +132,7 @@ async function handleJoinOverwrite(mode: string) {
 }
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title={eventInfo?.eventName ? `参加登録: ${eventInfo.eventName} | QRQueue` : "参加登録 | QRQueue"}>
         <div>
             
             <h1>イベント参加</h1>

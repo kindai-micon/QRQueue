@@ -26,7 +26,7 @@ namespace QRQueue.Controllers
         IPasscodeService passcodeService) : ControllerBase
     {
         [HttpGet(nameof(MyInfo))]
-        public async Task<IActionResult> MyInfo()
+        public async Task<ActionResult<SendUser>> MyInfo()
         {
 
             var user = await userManager.GetUserAsync(User);
@@ -34,18 +34,12 @@ namespace QRQueue.Controllers
             {
                 return NotFound();
             }
-            SendUser sendUser = new SendUser(user);
-            var roleStrList = await userManager.GetRolesAsync(user);
-            sendUser.Roles =
-                await roleManager.Roles.Include(x => x.Authorities).Where(x => roleStrList.Contains(x.Name))
-                    .Select(r => new SendRole(r))
-                    .ToListAsync();
-            return Ok(sendUser);
+            return await BuildSendUserAsync(user);
         }
 
         [Authorize("UserView")]
         [HttpGet(nameof(UserInfo))]
-        public async Task<IActionResult> UserInfo([FromQuery] string userName)
+        public async Task<ActionResult<SendUser>> UserInfo([FromQuery] string userName)
         {
 
             var user = await userManager.FindByNameAsync(userName);
@@ -53,13 +47,7 @@ namespace QRQueue.Controllers
             {
                 return NotFound();
             }
-            SendUser sendUser = new SendUser(user);
-            var roleStrList = await userManager.GetRolesAsync(user);
-            sendUser.Roles =
-                await roleManager.Roles.Include(x => x.Authorities).Where(x => roleStrList.Contains(x.Name))
-                    .Select(r => new SendRole(r))
-                    .ToListAsync();
-            return Ok(sendUser);
+            return await BuildSendUserAsync(user);
         }
 
         [Authorize("UserManagement")]
@@ -71,13 +59,13 @@ namespace QRQueue.Controllers
             var adminUsers = await userManager.GetUsersInRoleAsync("Admin");
             if(adminUsers.Any(x=>x.Id==user.Id) && adminUsers.Count == 1)
             {
-                return Conflict(new IdentityError[] { new () { Code = "adminerror", Description = "AdminUserが一人以上存在する必要があります" } });
+                return Conflict(new ApiMessage("AdminUserが一人以上存在する必要があります"));
             }
-            
+
             var result = await userManager.DeleteAsync(user);
             if (!result.Succeeded)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(result.Errors.ToApiMessage());
             }
             if (my.Id == user.Id)
             {
@@ -97,31 +85,25 @@ namespace QRQueue.Controllers
             var result = await signInManager.PasswordSignInAsync(user, loginModel.Password, true, false);
             if (!result.Succeeded)
             {
-                return BadRequest();
+                return BadRequest(new ApiMessage("メールアドレスまたはパスワードが正しくありません"));
             }
             return Ok();
         }
 
         [HttpPost(nameof(LoginByUserName))]
-        public async Task<IActionResult> LoginByUserName([FromBody] LoginNameModel loginModel)
+        public async Task<ActionResult<SendUser>> LoginByUserName([FromBody] LoginNameModel loginModel)
         {
             var user = await userManager.FindByNameAsync(loginModel.UserName);
             if (user == null)
             {
-                return NotFound();
+                return NotFound(new ApiMessage("ユーザーが見つかりません"));
             }
             var result = await signInManager.PasswordSignInAsync(user, loginModel.Password, true, false);
             if (!result.Succeeded)
             {
-                return BadRequest();
+                return BadRequest(new ApiMessage("ユーザー名またはパスワードが正しくありません"));
             }
-            var sendUser = new SendUser(user);
-            var roleStrList = await userManager.GetRolesAsync(user);
-            sendUser.Roles =
-                await roleManager.Roles.Include(x => x.Authorities).Where(x => roleStrList.Contains(x.Name))
-                .Select(r => new SendRole(r))
-                .ToListAsync();
-            return Ok(sendUser);
+            return await BuildSendUserAsync(user);
         }
         [Authorize(Policy = "UserView")]
         [Authorize(Policy = "UserManagement")]
@@ -136,7 +118,7 @@ namespace QRQueue.Controllers
                 var result = await userManager.CreateAsync(applicationUser, registerModel.Password);
                 if (!result.Succeeded)
                 {
-                    return BadRequest(result.Errors);
+                    return BadRequest(result.Errors.ToApiMessage());
                 }
                 if (registerModel.Email != null)
                 {
@@ -145,21 +127,21 @@ namespace QRQueue.Controllers
                 }
                 if (!result.Succeeded)
                 {
-                    return BadRequest(result.Errors);
+                    return BadRequest(result.Errors.ToApiMessage());
                 }
             }
             else
             {
-                return BadRequest(new IdentityError[] { new IdentityError() { Code = "Exists", Description = "存在するユーザー名です" } });
+                return BadRequest(new ApiMessage("存在するユーザー名です"));
             }
             return Ok();
         }
         [HttpGet(nameof(GetPasscode))]
-        public IActionResult GetPasscode()
+        public ActionResult<PasscodeView> GetPasscode()
         {
             var passcode = passcodeService.GetPasscode();
             Console.WriteLine("passcode:" + passcode);
-            return Ok(new { passcode });
+            return new PasscodeView(passcode);
         }
 
         [HttpPost(nameof(InitialRegister))]
@@ -169,8 +151,7 @@ namespace QRQueue.Controllers
             {
                 if (initialUser.Password != initialUser.ConfirmPassword)
                 {
-                    return BadRequest(new IdentityError[] { new IdentityError() { Code = "Passcode", Description = "Passcodeが異なります" } });
-
+                    return BadRequest(new ApiMessage("Passcodeが異なります"));
                 }
                 ApplicationUser applicationUser = new ApplicationUser();
                 applicationUser.UserName = initialUser.UserName;
@@ -178,13 +159,13 @@ namespace QRQueue.Controllers
                 var result = await userManager.CreateAsync(applicationUser, initialUser.Password);
                 if (result.Succeeded == false)
                 {
-                    return BadRequest(result.Errors.ToArray());
+                    return BadRequest(result.Errors.ToApiMessage());
                 }
                 ApplicationRole applicationRole = new ApplicationRole("Admin");
                 result = await roleManager.CreateAsync(applicationRole);
                 if (result.Succeeded == false)
                 {
-                    return BadRequest(result.Errors.ToArray());
+                    return BadRequest(result.Errors.ToApiMessage());
                 }
                 List<Authority> authorities = new List<Authority>();
                 foreach (var authority in authorityScanService.Authority)
@@ -198,20 +179,20 @@ namespace QRQueue.Controllers
                 result = await userManager.AddToRoleAsync(applicationUser, applicationRole.Name);
                 if (result.Succeeded == false)
                 {
-                    return BadRequest(result.Errors.ToArray());
+                    return BadRequest(result.Errors.ToApiMessage());
                 }
                 return Ok();
             }
             else
             {
-                return BadRequest(new IdentityError[] { new IdentityError() { Code = "Passcode", Description = "Passcodeが異なります" } });
+                return BadRequest(new ApiMessage("Passcodeが異なります"));
             }
         }
         [HttpGet(nameof(HasUser))]
-        public async Task<IActionResult> HasUser()
+        public async Task<ActionResult<bool>> HasUser()
         {
             int count = await userManager.Users.CountAsync();
-            return Ok(count != 0);
+            return count != 0;
         }
         [Authorize]
         [HttpPost(nameof(Logout))]
@@ -223,21 +204,15 @@ namespace QRQueue.Controllers
 
         [Authorize(Policy="UserView")]
         [HttpGet(nameof(UserList))]
-        public async Task<IActionResult> UserList()
+        public async Task<ActionResult<List<SendUser>>> UserList()
         {
             var users = (await userManager.Users.ToListAsync());
             List<SendUser> sendUsers = new List<SendUser>();
             foreach (var user in users)
             {
-                var sendUser = new SendUser(user);
-                sendUsers.Add(sendUser);
-                var roleStrList = await userManager.GetRolesAsync(user);
-                sendUser.Roles =
-                    await roleManager.Roles.Include(x => x.Authorities).Where(x => roleStrList.Contains(x.Name))
-                    .Select(r => new SendRole(r))
-                    .ToListAsync();
+                sendUsers.Add(await BuildSendUserAsync(user));
             }
-            return Ok(sendUsers);
+            return sendUsers;
         }
         [Authorize(Policy = "UserView")]
         [Authorize(Policy = "UserRoleManagement")]
@@ -257,7 +232,7 @@ namespace QRQueue.Controllers
             var result = await userManager.AddToRoleAsync(user, role.Name);
             if (!result.Succeeded)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(result.Errors.ToApiMessage());
             }
             return Ok();
         }
@@ -284,10 +259,22 @@ namespace QRQueue.Controllers
             var result = await userManager.RemoveFromRoleAsync(user, role.Name);
             if (!result.Succeeded)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(result.Errors.ToApiMessage());
             }
             return Ok();
 
+        }
+
+        /// <summary>ユーザーと付与ロール(権限込み)から SendUser を組み立てる共通処理</summary>
+        private async Task<SendUser> BuildSendUserAsync(ApplicationUser user)
+        {
+            var sendUser = new SendUser(user);
+            var roleStrList = await userManager.GetRolesAsync(user);
+            sendUser.Roles =
+                await roleManager.Roles.Include(x => x.Authorities).Where(x => roleStrList.Contains(x.Name))
+                .Select(r => new SendRole(r))
+                .ToListAsync();
+            return sendUser;
         }
     }
 }

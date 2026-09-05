@@ -1,4 +1,5 @@
 using QRQueue.Models;
+using QRQueue.Models.API;
 using QRQueue.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -33,7 +34,7 @@ namespace QRQueue.Controllers
             var passwordValid = await userManager.CheckPasswordAsync(currentUser, request.Password);
             if (!passwordValid)
             {
-                return BadRequest(new { error = "パスワードが正しくありません" });
+                return BadRequest(new ApiMessage("パスワードが正しくありません"));
             }
 
             try
@@ -47,11 +48,11 @@ namespace QRQueue.Controllers
                 // ログアウト
                 await signInManager.SignOutAsync();
 
-                return Ok(new { message = "すべてのデータが削除されました。データベースは初期状態にリセットされました。" });
+                return Ok(new ApiMessage("すべてのデータが削除されました。データベースは初期状態にリセットされました。"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = $"エラーが発生しました: {ex.Message}" });
+                return StatusCode(500, new ApiMessage($"エラーが発生しました: {ex.Message}"));
             }
         }
 

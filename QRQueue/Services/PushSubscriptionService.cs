@@ -1,4 +1,4 @@
-﻿using QRQueue.Models;
+using QRQueue.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -18,11 +18,12 @@ namespace QRQueue.Services
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                var vapidSection = configuration.GetSection("Vapid");
+                var vapidSubject = configuration.GetSection("Vapid")["Subject"]
+                    ?? "mailto:qrqueue@example.com";    // 未設定でも送信できるようフォールバック(§設定 Vapid:Subject で上書き可)
                 var vapidKey = await vapidService.GetOrCreateKeysAsync();
 
                 var vapidDetails = new VapidDetails(
-                    vapidSection["Subject"],
+                    vapidSubject,
                     vapidKey.PublicKey,
                     vapidKey.PrivateKey
                 );
@@ -44,7 +45,7 @@ namespace QRQueue.Services
                     {
                         title = title,
                         body = message,
-                        url = "ticket/" + subscription.DisplayId,
+                        url = "/ticket/" + subscription.DisplayId,
                         icon = "./favicon.png"          //変更？
                     });
 
@@ -56,9 +57,17 @@ namespace QRQueue.Services
                             vapidDetails
                         );
                     }
-                    catch (WebPushException)
+                    catch (WebPushException ex)
                     {
-                        db.PushSubscriptions.Remove(subscription);
+                        // 購読の無効化(404/410)のときだけ登録を削除。VAPID 設定ミス等の一時的エラーで削除しない
+                        if (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone)
+                        {
+                            db.PushSubscriptions.Remove(subscription);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Push send failed ({(int)ex.StatusCode}): {ex.Message}");
+                        }
                     }
                 }
 

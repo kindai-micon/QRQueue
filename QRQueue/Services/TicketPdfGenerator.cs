@@ -1,131 +1,47 @@
-﻿using QuestPDF.Fluent;
+using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
-using QRQueue.Models;
 using QuestPDF.Helpers;
 
 namespace QRQueue.Services
 {
     public class TicketPdfGenerator(IQrCodeGenerator qrCodeGenerator) : ITicketPdfGenerator
     {
-    public byte[] GenerateTicketsPdf(List<TicketInfo> tickets)
-    {
-        return Document.Create(container =>
+        public byte[] GenerateQrPosterPdf(string eventName, string kindLabel, string url, string instruction)
         {
-            // 1ページあたりのチケット数（2列 x 4行 = 8枚）
-            const int ticketsPerPage = 8;
-            const int columns = 2;
-            const int rows = 4;
+            // 掲示物は遠目から読み取るため高解像度で生成
+            var qrPng = qrCodeGenerator.GeneratePng(url, 1000, 1000);
 
-            // チケットをページごとに分割
-            for (int pageStart = 0; pageStart < tickets.Count; pageStart += ticketsPerPage)
+            return Document.Create(container =>
             {
-                var pageTickets = tickets.Skip(pageStart).Take(ticketsPerPage).ToList();
-
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
-                    page.Margin(20);
-                    page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Noto Sans JP").Medium());
+                    page.Margin(40);
+                    page.DefaultTextStyle(x => x.FontFamily("Noto Sans JP"));
 
-                    page.Content().Table(table =>
+                    page.Content().Column(col =>
                     {
-                        table.ColumnsDefinition(columns =>
-                        {
-                            columns.RelativeColumn();
-                            columns.RelativeColumn();
-                        });
+                        // タイトル(参加登録QR / チェックインQR)
+                        col.Item().AlignCenter().Text(kindLabel).FontSize(44).Bold();
 
-                        // チケットを2列×3行で配置
-                        for (int i = 0; i < pageTickets.Count; i += columns)
-                        {
-                            // 左列のチケット
-                            table.Cell().Border(1).Padding(8).Column(ticketCol =>
-                            {
-                                RenderTicket(ticketCol, pageTickets[i]);
-                            });
+                        // イベント名
+                        col.Item().AlignCenter().PaddingTop(8)
+                            .Text(eventName).FontSize(26).SemiBold();
 
-                            // 右列のチケット（存在する場合）
-                            if (i + 1 < pageTickets.Count)
-                            {
-                                table.Cell().Border(1).Padding(8).Column(ticketCol =>
-                                {
-                                    RenderTicket(ticketCol, pageTickets[i + 1]);
-                                });
-                            }
-                            else
-                            {
-                                table.Cell(); // 空のセル
-                            }
-                        }
+                        // 大きな QR(中央)
+                        col.Item().PaddingTop(30).AlignCenter().Width(440)
+                            .Image(qrPng, ImageScaling.FitWidth);
+
+                        // 読み取り案内
+                        col.Item().AlignCenter().PaddingTop(28)
+                            .Text(instruction).FontSize(18).Medium();
+
+                        // 補足: フォールバック用の素 URL(券ではなく掲示物 §8)
+                        col.Item().AlignCenter().PaddingTop(14)
+                            .Text($"直接入力: {url}").FontSize(10).FontColor(Colors.Grey.Darken1);
                     });
                 });
-            }
-        }).GeneratePdf();
-    }
-
-    public byte[] GenerateQrPosterPdf(string eventName, string kindLabel, string url, string instruction)
-    {
-        // 掲示物は遠目から読み取るため高解像度で生成
-        var qrPng = qrCodeGenerator.GeneratePng(url, 1000, 1000);
-
-        return Document.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.A4);
-                page.Margin(40);
-                page.DefaultTextStyle(x => x.FontFamily("Noto Sans JP"));
-
-                page.Content().Column(col =>
-                {
-                    // タイトル(参加登録QR / チェックインQR)
-                    col.Item().AlignCenter().Text(kindLabel).FontSize(44).Bold();
-
-                    // イベント名
-                    col.Item().AlignCenter().PaddingTop(8)
-                        .Text(eventName).FontSize(26).SemiBold();
-
-                    // 大きな QR(中央)
-                    col.Item().PaddingTop(30).AlignCenter().Width(440)
-                        .Image(qrPng, ImageScaling.FitWidth);
-
-                    // 読み取り案内
-                    col.Item().AlignCenter().PaddingTop(28)
-                        .Text(instruction).FontSize(18).Medium();
-
-                    // 補足: フォールバック用の素 URL(券ではなく掲示物 §8)
-                    col.Item().AlignCenter().PaddingTop(14)
-                        .Text($"直接入力: {url}").FontSize(10).FontColor(Colors.Grey.Darken1);
-                });
-            });
-        }).GeneratePdf();
-    }
-
-    private void RenderTicket(ColumnDescriptor ticketCol, TicketInfo ticket)
-    {
-        // タイトル
-        ticketCol.Item().AlignCenter().Text(ticket.Name).FontSize(16).FontFamily("Noto Sans JP").Bold();
-
-        // 中段：QR + 番号
-        ticketCol.Item().Row(row =>
-        {
-            row.Spacing(5);
-            row.RelativeItem().AlignBottom().Text($"抽選番号：No.{ticket.TicketNumber}")
-                .FontFamily("Noto Sans JP").FontSize(16).Bold();
-
-            row.ConstantItem(100).AlignRight().Height(80)
-                .Image(qrCodeGenerator.GeneratePng(ticket.Url), ImageScaling.FitHeight);
-        });
-
-        // 説明と注意
-        ticketCol.Item().PaddingTop(5).Column(bottom =>
-        {
-            bottom.Item().Text(ticket.Description).FontSize(9);
-            bottom.Item().Text(ticket.Warning).FontSize(8);
-
-            // Powered by 表記
-            bottom.Item().PaddingTop(10).AlignRight().Text("Powered by Micon club").FontSize(6).Italic().FontColor(Colors.Grey.Medium);
-        });
-    }
+            }).GeneratePdf();
+        }
     }
 }

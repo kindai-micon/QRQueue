@@ -5,8 +5,8 @@ namespace QRQueue.Services;
 
 /// <summary>
 /// 先着順呼び出し番号の採番サービス(設計 §4.5)。
-/// 既存 `TicketIssuanceService` と同じく Serializable 分離レベルのトランザクション内で
-/// `MAX(Number)+1` 方式を行い、同時参加の採番競合を防ぐ。開始番号は旧踏襲で 1000 番。
+/// Serializable 分離レベルのトランザクション内で `MAX(Number)+1` 方式を行い、
+/// 同時参加の採番競合を防ぐ。開始番号は旧踏襲で 1000 番。
 /// </summary>
 public interface IGroupNumberIssuanceService
 {

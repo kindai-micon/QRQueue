@@ -48,13 +48,19 @@ namespace QRQueue
             builder.Services.AddControllers().AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+                // enum は全 API で文字列化する(GroupStatus など。フロントの TS 型も union 型で一致させる)
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
+            // [ApiController] の自動 400(ProblemDetails)も { message } 形式に統一する
+            builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+                o.InvalidModelStateResponseFactory = ctx => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                    new Models.API.ApiMessage(string.Join(" ", ctx.ModelState.Values
+                        .SelectMany(v => v.Errors).Select(e => e.ErrorMessage).Where(m => !string.IsNullOrEmpty(m))))));
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
             builder.Services.AddSingleton<IQrCodeGenerator, QrCodeGenerator>();
             // QR に埋める BaseURL 解決の共通化(設計§8)
             builder.Services.AddSingleton<IBaseUrlResolver, BaseUrlResolver>();
-            builder.Services.AddScoped<ITicketIssuanceService, TicketIssuanceService>();
             builder.Services.AddScoped<IGroupNumberIssuanceService, GroupNumberIssuanceService>();
             builder.Services.AddScoped<IQueueCallService, QueueCallService>();
             builder.Services.AddSingleton<IVapidService, VapidService>();
@@ -73,7 +79,6 @@ namespace QRQueue
             builder.Services.AddScoped<IEventRepository, EventRepository>();
             builder.Services.AddScoped<IParticipationGroupRepository, ParticipationGroupRepository>();
             builder.Services.AddScoped<ITicketRepository, TicketRepository>();
-            builder.Services.AddScoped<IIssueLogRepository, IssueLogRepository>();
 
             // CORS設定: 開発環境は全許可、本番はappsettings.jsonから取得
             builder.Services.AddCors(options =>

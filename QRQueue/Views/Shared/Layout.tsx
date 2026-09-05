@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
+import type { SendUser } from "@/Shared/api";
 
 // SvelteKit routes/+layout.svelte から移行
 // (未ログインなら /login へリダイレクトする管理画面共通レイアウト)
@@ -9,10 +10,15 @@ const MENU_ITEMS = [
     { name: "イベント管理", href: "/event" },
 ];
 
-export default function Layout({ children, chrome = "full" }: { children?: ComponentChildren; chrome?: "full" | "header" }) {
+export default function Layout({ children, chrome = "full", title }: { children?: ComponentChildren; chrome?: "full" | "header"; title?: string }) {
     const [userName, setUserName] = useState<string | null>(null);
     const [checked, setChecked] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
+
+    // タブにURLではなくページ名を表示する(SSR の <title> に加えてクライアントでも確定させる)
+    useEffect(() => {
+        if (title) document.title = title;
+    }, [title]);
 
     useEffect(() => {
         // ヘッダーのみのページ(ログイン・初期登録・チケット確認)では
@@ -23,7 +29,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
             try {
                 const res = await fetch("/api/user/MyInfo");
                 if (res.ok) {
-                    const data = await res.json();
+                    const data: SendUser = await res.json();
                     setUserName(data?.userName ?? null);
                 }
             } catch (error) {
@@ -42,6 +48,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
 
     return (
         <div>
+            {title && <title>{title}</title>}
             <link rel="stylesheet" href="/css/layout.css" />
             <link rel="stylesheet" href="/css/site.css" />
             <div class="app-container">

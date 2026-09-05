@@ -1,27 +1,21 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import type { EventInfoView } from "@/Shared/api";
 
 type Model = {
     eventId: string; // eventDisplayId
 };
 
-type EventInfo = {
-    eventName: string;
-    status: string;
-    isOpen: boolean;
-    maxGroupSize: number;
-};
-
 // 掲示物発行画面(設計§9.1 /event/[eventid]/publishing 改造)。
 // 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(§8 / PR#9)。
 export default function Publishing({ model }: { model: Model }) {
-    const [ev, setEv] = useState<EventInfo | null>(null);
+    const [ev, setEv] = useState<EventInfoView | null>(null);
 
     useEffect(() => {
         (async () => {
             try {
                 const res = await fetch(`/api/entry/${model.eventId}`);
-                if (res.ok) setEv(await res.json());
+                if (res.ok) setEv(await res.json() as EventInfoView);
             } catch (err) {
                 console.error("イベント情報の取得に失敗:", err);
             }
@@ -51,7 +45,7 @@ export default function Publishing({ model }: { model: Model }) {
     }
 
     return (
-        <Layout>
+        <Layout title={ev?.eventName ? `QR掲示PDF発行: ${ev.eventName} | QRQueue` : "QR掲示PDF発行 | QRQueue"}>
             <link rel="stylesheet" href="/css/event-publishing.css" />
             <div class="publishing-container">
                 <div class="page-title">イベント: {ev?.eventName ?? "..."}</div>

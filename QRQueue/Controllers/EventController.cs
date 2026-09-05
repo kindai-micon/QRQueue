@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using Event = QRQueue.Models.Event;
 
 namespace QRQueue.Controllers
 {
@@ -14,10 +13,10 @@ namespace QRQueue.Controllers
     {
         [Authorize]
         [HttpGet(nameof(List))]
-        public async Task<IActionResult> List()
+        public async Task<ActionResult<List<EventListItem>>> List()
         {
-            var list = await applicationDbContext.Events.Select(x => new { name = x.Name, id = x.DisplayId.ToString()}).ToListAsync();
-            return Ok(list);
+            var list = await applicationDbContext.Events.Select(x => new EventListItem(x.Name, x.DisplayId.ToString())).ToListAsync();
+            return list;
         }
         [Authorize(Policy = "EventManagement")]
         [HttpPost(nameof(Create))]
@@ -25,7 +24,7 @@ namespace QRQueue.Controllers
         {
             if (applicationDbContext.Events.Any(x => x.Name == name))
             {
-                return BadRequest("Event already exists");
+                return BadRequest(new ApiMessage("Event already exists"));
             }
             else
             {
@@ -68,14 +67,14 @@ namespace QRQueue.Controllers
             return Ok();
         }
         [HttpGet(nameof(Name))]
-        public async Task<IActionResult> Name([FromQuery] string id)
+        public async Task<ActionResult<string>> Name([FromQuery] string id)
         {
             var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.DisplayId.ToString() == id);
             if(ev == null)
             {
                 return NotFound();
             }
-            return Ok(ev?.Name);
+            return ev.Name;
         }
         [Authorize]
 

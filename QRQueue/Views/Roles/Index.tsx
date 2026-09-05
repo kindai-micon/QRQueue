@@ -1,14 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-
-type SendAuthority = {
-    name: string;
-};
-
-type SendRole = {
-    name: string;
-    authorities: SendAuthority[];
-};
+import type { SendRole } from "@/Shared/api";
 
 // SvelteKit routes/roles/+page.svelte から移行
 export default function Index() {
@@ -23,12 +15,12 @@ export default function Index() {
 
     async function fetchRoles() {
         const res = await fetch("/api/Role/RoleList");
-        setRoles(await res.json());
+        setRoles(await res.json() as SendRole[]);
     }
 
     async function fetchAuthorityList() {
         const res = await fetch("/api/Role/AuthorityList");
-        setAuthorityList(await res.json());
+        setAuthorityList(await res.json() as string[]);
     }
 
     async function addRole(e: Event) {
@@ -80,7 +72,7 @@ export default function Index() {
     }
 
     return (
-        <Layout>
+        <Layout title="ロール管理 | QRQueue">
             <link rel="stylesheet" href="/css/roles.css" />
             <div class="roles-container">
                 <h2>ロール管理</h2>

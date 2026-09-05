@@ -1,21 +1,14 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-import { readErrorMessage } from "@/Shared/queue";
+import { readErrorMessage, type GroupInfoView, type JoinResult } from "@/Shared/api";
 
 type Model = {
     joinToken: string;
 };
 
-type GroupInfo = {
-    groupNumber: number;
-    memberCount: number;
-    isFull: boolean;
-    isJoinable: boolean;
-};
-
 // グループ参加確認画面(設計§9.1 /join/[token])。方式③の招待QRの飛び先。
 export default function Join({ model }: { model: Model }) {
-    const [info, setInfo] = useState<GroupInfo | null>(null);
+    const [info, setInfo] = useState<GroupInfoView | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -26,7 +19,8 @@ export default function Join({ model }: { model: Model }) {
             try {
                 const res = await fetch(`/api/entry/group/${encodeURIComponent(model.joinToken)}`);
                 if (res.ok) {
-                    setInfo(await res.json());
+                    const data: GroupInfoView = await res.json();
+                    setInfo(data);
                 } else {
                     setNotFound(true);
                     setError(await readErrorMessage(res));
@@ -50,7 +44,7 @@ export default function Join({ model }: { model: Model }) {
                 body: JSON.stringify({ joinToken: model.joinToken }),
             });
             if (res.ok) {
-                const data = await res.json();
+                const data: JoinResult = await res.json();
                 window.location.href = `/ticket/${data.ticketDisplayId}`;
                 return;
             }
@@ -64,7 +58,7 @@ export default function Join({ model }: { model: Model }) {
     }
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title="グループ参加 | QRQueue">
             <link rel="stylesheet" href="/css/join.css" />
             <div class="join-container">
                 {!loaded && <p class="join-loading">グループ情報を読み込み中...</p>}
