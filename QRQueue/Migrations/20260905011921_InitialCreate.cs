@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace QRQueue.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialUpdate : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -49,6 +49,43 @@ namespace QRQueue.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "IssueLogs",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    IssuerName = table.Column<string>(type: "text", nullable: false),
+                    IssuedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Count = table.Column<int>(type: "integer", nullable: false),
+                    StartNumber = table.Column<long>(type: "bigint", nullable: false),
+                    EndNumber = table.Column<long>(type: "bigint", nullable: false),
+                    EventDisplayId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Created = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Updated = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_IssueLogs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PushSubscriptions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    DisplayId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Endpoint = table.Column<string>(type: "text", nullable: false),
+                    P256dh = table.Column<string>(type: "text", nullable: false),
+                    Auth = table.Column<string>(type: "text", nullable: false),
+                    ExpirationTime = table.Column<long>(type: "bigint", nullable: true),
+                    Created = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Updated = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PushSubscriptions", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -195,20 +232,45 @@ namespace QRQueue.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "LotteryGroups",
+                name: "RefreshTokens",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Token = table.Column<string>(type: "text", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    IsRevoked = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RefreshTokens", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RefreshTokens_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Events",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    DisplayId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "text", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    AutoGroupSize = table.Column<int>(type: "integer", nullable: false),
                     TicketInfoId = table.Column<Guid>(type: "uuid", nullable: false),
                     Created = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Updated = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_LotteryGroups", x => x.Id);
+                    table.PrimaryKey("PK_Events", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LotteryGroups_TicketInfo_TicketInfoId",
+                        name: "FK_Events_TicketInfo_TicketInfoId",
                         column: x => x.TicketInfoId,
                         principalTable: "TicketInfo",
                         principalColumn: "Id",
@@ -216,25 +278,28 @@ namespace QRQueue.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "LotterySlots",
+                name: "ParticipationGroups",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    Merchandise = table.Column<string>(type: "text", nullable: false),
-                    NumberOfFrames = table.Column<int>(type: "integer", nullable: false),
-                    DeadLine = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    LotteryGroupId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DisplayId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<long>(type: "bigint", nullable: false),
+                    EventId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    JoinToken = table.Column<string>(type: "text", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    CalledAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CallCount = table.Column<int>(type: "integer", nullable: false),
                     Created = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Updated = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_LotterySlots", x => x.Id);
+                    table.PrimaryKey("PK_ParticipationGroups", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LotterySlots_LotteryGroups_LotteryGroupId",
-                        column: x => x.LotteryGroupId,
-                        principalTable: "LotteryGroups",
+                        name: "FK_ParticipationGroups_Events_EventId",
+                        column: x => x.EventId,
+                        principalTable: "Events",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -246,9 +311,9 @@ namespace QRQueue.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Number = table.Column<long>(type: "bigint", nullable: false),
                     DisplayId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LotteryGroupId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LotterySlotsId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ParticipationGroupId = table.Column<Guid>(type: "uuid", nullable: true),
                     Status = table.Column<int>(type: "integer", nullable: false),
+                    ParticipantToken = table.Column<Guid>(type: "uuid", nullable: true),
                     Created = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Updated = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
@@ -256,15 +321,9 @@ namespace QRQueue.Migrations
                 {
                     table.PrimaryKey("PK_Tickets", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Tickets_LotteryGroups_LotteryGroupId",
-                        column: x => x.LotteryGroupId,
-                        principalTable: "LotteryGroups",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Tickets_LotterySlots_LotterySlotsId",
-                        column: x => x.LotterySlotsId,
-                        principalTable: "LotterySlots",
+                        name: "FK_Tickets_ParticipationGroups_ParticipationGroupId",
+                        column: x => x.ParticipationGroupId,
+                        principalTable: "ParticipationGroups",
                         principalColumn: "Id");
                 });
 
@@ -311,24 +370,24 @@ namespace QRQueue.Migrations
                 column: "RoleId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_LotteryGroups_TicketInfoId",
-                table: "LotteryGroups",
+                name: "IX_Events_TicketInfoId",
+                table: "Events",
                 column: "TicketInfoId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_LotterySlots_LotteryGroupId",
-                table: "LotterySlots",
-                column: "LotteryGroupId");
+                name: "IX_ParticipationGroups_EventId",
+                table: "ParticipationGroups",
+                column: "EventId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Tickets_LotteryGroupId",
-                table: "Tickets",
-                column: "LotteryGroupId");
+                name: "IX_RefreshTokens_UserId",
+                table: "RefreshTokens",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Tickets_LotterySlotsId",
+                name: "IX_Tickets_ParticipationGroupId",
                 table: "Tickets",
-                column: "LotterySlotsId");
+                column: "ParticipationGroupId");
         }
 
         /// <inheritdoc />
@@ -353,19 +412,28 @@ namespace QRQueue.Migrations
                 name: "Authorities");
 
             migrationBuilder.DropTable(
-                name: "Tickets");
+                name: "IssueLogs");
 
             migrationBuilder.DropTable(
-                name: "AspNetUsers");
+                name: "PushSubscriptions");
+
+            migrationBuilder.DropTable(
+                name: "RefreshTokens");
+
+            migrationBuilder.DropTable(
+                name: "Tickets");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
-                name: "LotterySlots");
+                name: "AspNetUsers");
 
             migrationBuilder.DropTable(
-                name: "LotteryGroups");
+                name: "ParticipationGroups");
+
+            migrationBuilder.DropTable(
+                name: "Events");
 
             migrationBuilder.DropTable(
                 name: "TicketInfo");

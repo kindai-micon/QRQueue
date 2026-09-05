@@ -107,12 +107,7 @@ public class QueueCallService(
             groupNumber = group.Number,
             groupDisplayId = group.DisplayId.ToString()
         });
-
-        foreach (var ticket in group.Tickets.Where(t => t.Status != TicketStatus.Cancelled))
-        {
-            // 呼び出し通知に転用(設計§7)。master 側のメソッド名 SendLotteryPushAsync を使用
-            await pushSubscriptionService.SendLotteryPushAsync(ticket);
-        }
+        await pushSubscriptionService.SendNotifyTicketGroupAsync(group.Tickets, $"{ev.Name}で順番になりました",$"順番になりましたのでブースまで来てください");
     }
 
     private Task NotifyQueueChangedAsync(Event ev)
