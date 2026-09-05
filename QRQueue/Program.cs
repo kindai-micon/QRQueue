@@ -18,7 +18,6 @@ using JsxCore;
 using JsxCore.Hosting;
 using JsxCore.Mvc;
 using Microsoft.AspNetCore.Authentication;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
 namespace QRQueue
 {
