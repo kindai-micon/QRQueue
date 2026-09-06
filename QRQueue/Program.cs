@@ -206,6 +206,21 @@ namespace QRQueue
                 OnPrepareResponse = ctx =>
                     ctx.Context.Response.Headers.CacheControl = "no-cache"
             });
+            // JsxCore のビュー JS(/_jsx/ 配下)は public, max-age=31536000(1年)で配信されるが、
+            // URL のバージョン識別子がデプロイ間で不変のため、ブラウザが古いビュー JSを使い続け
+            // 「HTML/CSSは新しくて描画だけ古い」状態が起きる。毎回鮮度検証させる(ETag で 304)
+            app.Use(async (context, next) =>
+            {
+                context.Response.OnStarting(() =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/_jsx"))
+                    {
+                        context.Response.Headers.CacheControl = "no-cache";
+                    }
+                    return Task.CompletedTask;
+                });
+                await next();
+            });
             app.UseJsxCore();
             app.UseRouting();
 
