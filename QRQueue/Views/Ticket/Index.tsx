@@ -78,56 +78,56 @@ export default function Index({ model }: { model: Model }) {
         const reg = await navigator.serviceWorker.ready;
         let sub = await reg.pushManager.getSubscription();
 
-        if (!notification || !sub) {
-            if ("serviceWorker" in navigator) {
-                if (Notification.permission === "default") {
-                    await Notification.requestPermission();
+        // 登録済み表示でも再登録できるよう、クリック時は常にサーバーへ(upsert)。
+        // 過去に登録が失敗した端末を復旧させるため
+        if ("serviceWorker" in navigator) {
+            if (Notification.permission === "default") {
+                await Notification.requestPermission();
+            }
+
+            if (Notification.permission === "granted") {
+                const publicKey = await getVapidPublicKey();
+                if (!sub) {
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicKey),
+                    });
                 }
 
-                if (Notification.permission === "granted") {
-                    const publicKey = await getVapidPublicKey();
-                    if (!sub) {
-                        sub = await reg.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: urlBase64ToUint8Array(publicKey),
-                        });
-                    }
-
-                    // PushSubscription を直接 stringify すると endpoint しか送られないため、
-                    // 鍵(p256dh / auth)を明示的に取り出してサーバーと同じ形式で送る
-                    const p256dh = sub.getKey("p256dh");
-                    const auth = sub.getKey("auth");
-                    if (!p256dh || !auth) {
-                        console.error("購読の鍵が取得できませんでした");
-                        return;
-                    }
-
-                    try {
-                        const res = await fetch(`/api/push-subscription/${model.ticketId}`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                endpoint: sub.endpoint,
-                                keys: {
-                                    p256dh: arrayBufferToBase64(p256dh),
-                                    auth: arrayBufferToBase64(auth),
-                                },
-                            }),
-                        });
-                        if (!res.ok) {
-                            console.error("通知の登録に失敗:", res.status, await readErrorMessage(res));
-                            return;
-                        }
-                    } catch (error) {
-                        console.error("通知の登録に失敗:", error);
-                        return;
-                    }
-
-                    setNotification(true);
-                    const updated = [...notifications, model.ticketId];
-                    setNotifications(updated);
-                    localStorage.setItem("notifications", JSON.stringify(updated));
+                // PushSubscription を直接 stringify すると endpoint しか送られないため、
+                // 鍵(p256dh / auth)を明示的に取り出してサーバーと同じ形式で送る
+                const p256dh = sub.getKey("p256dh");
+                const auth = sub.getKey("auth");
+                if (!p256dh || !auth) {
+                    console.error("購読の鍵が取得できませんでした");
+                    return;
                 }
+
+                try {
+                    const res = await fetch(`/api/push-subscription/${model.ticketId}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            endpoint: sub.endpoint,
+                            keys: {
+                                p256dh: arrayBufferToBase64(p256dh),
+                                auth: arrayBufferToBase64(auth),
+                            },
+                        }),
+                    });
+                    if (!res.ok) {
+                        console.error("通知の登録に失敗:", res.status, await readErrorMessage(res));
+                        return;
+                    }
+                } catch (error) {
+                    console.error("通知の登録に失敗:", error);
+                    return;
+                }
+
+                setNotification(true);
+                const updated = [...notifications, model.ticketId];
+                setNotifications(updated);
+                localStorage.setItem("notifications", JSON.stringify(updated));
             }
         }
     }
