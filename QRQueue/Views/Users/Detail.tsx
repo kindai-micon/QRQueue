@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import MessageModal from "@/Shared/Modal";
 import { readErrorMessage, type SendRole, type SendUser } from "@/Shared/api";
 
 type Model = {
@@ -20,6 +21,7 @@ export default function Detail({ model }: { model: Model }) {
     const [showResetPassword, setShowResetPassword] = useState(false);
     const [resetError, setResetError] = useState<string | null>(null);
     const [resetSubmitting, setResetSubmitting] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -69,7 +71,7 @@ export default function Detail({ model }: { model: Model }) {
             setNewRoleName("");
         } else {
             const text = await response.text();
-            alert("ロール追加失敗: " + text);
+            setNotice("ロール追加失敗: " + text);
         }
     }
 
@@ -86,7 +88,7 @@ export default function Detail({ model }: { model: Model }) {
             setUser({ ...user, roles: user.roles.filter((r) => r.name !== roleToRemove.name) });
         } else {
             const text = await response.text();
-            alert("ロール削除失敗: " + text);
+            setNotice("ロール削除失敗: " + text);
         }
 
         setRoleToRemove(null);
@@ -123,7 +125,7 @@ export default function Detail({ model }: { model: Model }) {
             if (response.ok) {
                 setResetPassword("");
                 setResetConfirmPassword("");
-                alert("パスワードを変更しました。");
+                setNotice("パスワードを変更しました。");
             } else {
                 // 統一エラー形式 ApiMessage(IdentityError もサーバー側で結合済み)
                 setResetError(await readErrorMessage(response));
@@ -139,6 +141,7 @@ export default function Detail({ model }: { model: Model }) {
     return (
         <Layout title="ユーザー詳細 | QRQueue">
             <link rel="stylesheet" href="/css/users-detail.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             {showModal && roleToRemove && (
                 <div class="modal-overlay">
                     <div class="modal">

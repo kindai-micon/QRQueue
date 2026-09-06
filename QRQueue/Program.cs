@@ -175,6 +175,27 @@ namespace QRQueue
 
             var app = builder.Build();
 
+            // デプロイ(サービス再起動)後の一定時間、HTML 応答に Clear-Site-Data: "cache" を付与し、
+            // ブラウザ保持の古いキャッシュ(以前の 1年キャッシュのビュー JS 等)を強制破棄する。
+            // これによりデプロイ直後のアクセスで必ず新しい assets から読み直せる。
+            // 未対応ブラウザではヘッダーが無視されるだけで害はない
+            var appStartedAtUtc = DateTimeOffset.UtcNow;
+            static bool IsDocumentRequest(HttpContext ctx) =>
+                HttpMethods.IsGet(ctx.Request.Method) &&
+                !ctx.Request.Path.StartsWithSegments("/api") &&
+                !ctx.Request.Path.StartsWithSegments("/_jsx") &&
+                (ctx.Request.Headers.Accept.ToString().Contains("text/html") ||
+                 string.IsNullOrEmpty(ctx.Request.Headers.Accept));
+            app.Use(async (context, next) =>
+            {
+                if (DateTimeOffset.UtcNow - appStartedAtUtc < TimeSpan.FromMinutes(10) &&
+                    IsDocumentRequest(context))
+                {
+                    context.Response.Headers["Clear-Site-Data"] = "\"cache\"";
+                }
+                await next();
+            });
+
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
@@ -198,7 +219,33 @@ namespace QRQueue
                 app.UseHttpsRedirection();
             }
 
-            app.UseStaticFiles();
+            // 静的ファイル(CSS等)は Cache-Control: no-cache で配信し、毎回鮮度検証させる。
+            // 既定のまま(ヘッダー無し)だとブラウザのヒューリスティックキャッシュにより、
+            // HTMLは新しくてCSSだけ古い状態が発生するため(ETag 付きなので未更新時は 304 で高速)
+            // 静的ファイル(CSS等)のキャッシュは 60 秒に制限する。
+            // 既定(ヘッダー無し)だとヒューリスティックキャッシュで不定期に古くなり、
+            // 1年指定等だとデプロイ後も古いファイルを使い続けて描画が壊れるため
+            const string CacheControl = "public, max-age=60";
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = ctx =>
+                    ctx.Context.Response.Headers.CacheControl = CacheControl
+            });
+            // JsxCore のビュー JS(/_jsx/ 配下)は public, max-age=31536000(1年)で配信されるが、
+            // URL のバージョン識別子がデプロイ間で不変のため、ブラウザが古いビュー JSを使い続け
+            // 「HTML/CSSは新しくて描画だけ古い」状態が起きる。こちらも 60 秒に制限する
+            app.Use(async (context, next) =>
+            {
+                context.Response.OnStarting(() =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/_jsx"))
+                    {
+                        context.Response.Headers.CacheControl = CacheControl;
+                    }
+                    return Task.CompletedTask;
+                });
+                await next();
+            });
             app.UseJsxCore();
             app.UseRouting();
 
