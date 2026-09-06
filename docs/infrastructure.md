@@ -14,23 +14,32 @@ flowchart LR
         S["スタッフ・管理者(ブラウザ)<br/>呼び出しコンソール / 投影 / 管理画面"]
     end
 
+    CF["Cloudflare<br/>(DNS / HTTPS 終端)"]
+
     subgraph server["リリースサーバー(Linux)"]
+        CFD["cloudflared<br/>(Cloudflare Tunnel)<br/>アウトバウンド接続"]
+        NGINX["nginx<br/>(リバースプロキシ)"]
         APP["qrqueue.service (systemd)<br/>.NET 10 ASP.NET Core + JsxCore<br/>:5000"]
         DB[("PostgreSQL<br/>lottery-db")]
+        CFD --> NGINX --> APP
         APP --- DB
     end
 
     PUSH["ブラウザ プッシュサービス<br/>(FCM / APNs)"]
 
-    P -- "HTTP / WebSocket(SignalR)<br/>:5000" --> APP
-    S -- "HTTP / WebSocket(SignalR)<br/>:5000" --> APP
+    P -- "HTTPS" --> CF
+    S -- "HTTPS" --> CF
+    CF -- "Tunnel<br/>(サーバーから外向きに接続)" --> CFD
     APP -- "Web Push (VAPID)" --> PUSH
     PUSH -- "呼び出し通知" --> P
 ```
 
 ![全体構成](images/infrastructure-overall.png)
 
+- 利用者は Cloudflare 経由で HTTPS アクセス。Tunnel はサーバー側から外向きに張るため、
+  インバウンドのポート開放は不要(cloudflared → nginx → アプリの順にフォワード)
 - アプリは `ASPNETCORE_URLS=http://*:5000` で待ち受け(`.deploy/qrqueue.service`)
+- nginx は SignalR の WebSocket アップグレード(`Upgrade`/`Connection` ヘッダ)を中継する必要がある
 - DB 接続文字列は GitHub Secrets `APPSETTINGS_JSON` 経由で `appsettings.json` として配置
 - PDF(QuestPDF)・QR生成はアプリ内で完結(外部サービスなし)
 
