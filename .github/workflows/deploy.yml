@@ -76,6 +76,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
+          SUDO_PASS: ${{ secrets.SUDO_PASS }}
           APPSETTINGS_JSON: ${{ secrets.APPSETTINGS_JSON }}
         run: |
           DEPLOY_DIR="/var/www/qrqueue/publish"
@@ -83,9 +84,18 @@ jobs:
 
           echo "Deploying to: $DEPLOY_DIR"
 
+          # sudo パスワードを設定している場合はそれを sudo に流し込む(sudo -S)。
+          # 未設定なら sudoers の NOPASSWD 前提
+          SUDO_PASS_B64=$(printf '%s' "$SUDO_PASS" | base64 -w 0)
+
           # 初回実行時に配布先が無いと rsync が落ちるため作成する(2回目以降は冪等)
-          # sudo は既存のリモートスクリプト(systemctl 等)と同じく NOPASSWD を前提
-          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "sudo mkdir -p $DEPLOY_DIR && sudo chown \$(id -u):\$(id -g) $DEPLOY_DIR"
+          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "SUDO_PASS_B64=${SUDO_PASS_B64} DEPLOY_DIR=${DEPLOY_DIR}" 'bash -s' << 'EOF'
+          if [ -n "$SUDO_PASS_B64" ]; then
+            echo "$SUDO_PASS_B64" | base64 -d | sudo -S -v 2>/dev/null
+          fi
+          sudo mkdir -p "$DEPLOY_DIR"
+          sudo chown "$(id -u):$(id -g)" "$DEPLOY_DIR"
+          EOF
 
           # サービスファイルをアップロード(-S で ssh の代わりにラッパーを使う)
           scp -S "$SSH" .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
@@ -100,10 +110,14 @@ jobs:
           # appsettings.json を配置してサービス再起動
           APPSETTINGS_B64=$(echo -n "${APPSETTINGS_JSON}" | base64 -w 0)
 
-          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
+          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "SUDO_PASS_B64=${SUDO_PASS_B64} APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
 
-          # サービスファイルを更新(システム領域なので sudo が要る。
-          # DEPLOY_USER 向けに sudoers で NOPASSWD 許可が必要 — PR #24 の説明参照)
+          # sudo パスワードがあれば -v で認証を済ませておく(NOPASSWD 環境では何もしない)
+          if [ -n "$SUDO_PASS_B64" ]; then
+            echo "$SUDO_PASS_B64" | base64 -d | sudo -S -v 2>/dev/null
+          fi
+
+          # サービスファイルを更新(システム領域なので sudo が要る)
           sudo mv /tmp/qrqueue.service /etc/systemd/system/qrqueue.service
           sudo systemctl daemon-reload
 
