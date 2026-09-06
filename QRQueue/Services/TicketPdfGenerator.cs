@@ -36,9 +36,10 @@ namespace QRQueue.Services
                         col.Item().AlignCenter().PaddingTop(28)
                             .Text(instruction).FontSize(18).Medium();
 
-                        // 補足: フォールバック用の素 URL(券ではなく掲示物 §8)
-                        col.Item().AlignCenter().PaddingTop(14)
-                            .Text($"直接入力: {url}").FontSize(10).FontColor(Colors.Grey.Darken1);
+                        // クレジット
+                        col.Item().AlignCenter().PaddingTop(24)
+                            .Text("Powered by 近畿大学プログラミング研究部").FontSize(10)
+                            .FontColor(Colors.Grey.Darken1);
                     });
                 });
             }).GeneratePdf();

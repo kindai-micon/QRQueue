@@ -60,6 +60,7 @@ export default function Layout({ children, chrome = "full", title }: { children?
                         )}
                         <div class="layout-title">QRQueue 管理システム</div>
                     </div>
+                    <div class="header-right">Powered by 近畿大学プログラミング研究部</div>
                 </header>
                 {drawerOpen && (
                     <div class="drawer">
@@ -85,6 +86,7 @@ export default function Layout({ children, chrome = "full", title }: { children?
                     )}
                     <main class="main">{children}</main>
                 </div>
+                <footer class="layout-footer">Powered by 近畿大学プログラミング研究部</footer>
             </div>
         </div>
     );
