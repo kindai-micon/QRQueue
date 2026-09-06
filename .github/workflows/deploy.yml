@@ -99,13 +99,16 @@ jobs:
           # 未設定なら sudoers の NOPASSWD 前提
           SUDO_PASS_B64=$(printf '%s' "$SUDO_PASS" | base64 -w 0)
 
-          # 初回実行時に配布先が無いと rsync が落ちるため作成する(2回目以降は冪等)
+          # 配布先を作成し、中身も含めて全て deploy ユーザー所有にする(冪等)。
+          # -R が要るのは、サービス(root 動作)が起動時コンパイル等で root 所有の
+          # ファイルを作ることがあり、そのままだと rsync --delete の unlink が
+          # Permission denied で code 23 になるため
           "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "SUDO_PASS_B64=${SUDO_PASS_B64} DEPLOY_DIR=${DEPLOY_DIR}" 'bash -s' << 'EOF'
           if [ -n "$SUDO_PASS_B64" ]; then
             echo "$SUDO_PASS_B64" | base64 -d | sudo -S -v 2>/dev/null
           fi
           sudo mkdir -p "$DEPLOY_DIR"
-          sudo chown "$(id -u):$(id -g)" "$DEPLOY_DIR"
+          sudo chown -R "$(id -u):$(id -g)" "$DEPLOY_DIR"
           EOF
 
           # サービスファイルをアップロード(-S で ssh の代わりにラッパーを使う)
