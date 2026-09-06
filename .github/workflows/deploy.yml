@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      # Tailscale Workload Identity Federation 用: GitHub OIDC トークンの発行を許可する
+      id-token: write
 
     steps:
       - name: Checkout code
@@ -30,43 +33,70 @@ jobs:
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
         with:
+          # Workload Identity Federation: OAuth シークレット無しで認証する
+          # TS_OAUTH_CLIENT_ID / TS_AUDIENCE には Federated Identity の Client ID / Audience を入れる
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          audience: ${{ secrets.TS_AUDIENCE }}
           tags: tag:ci
           ping: ${{ secrets.DEPLOY_HOST }}
 
-      - name: Setup SSH key
+      - name: Setup SSH (key or password)
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          # ssh ラッパーを作る。鍵(DEPLOY_KEY)があれば鍵認証、無ければパスワード(DEPLOY_PASS)認証。
+          # 以降のステップでは ssh の代わりに ./ssh-ci を使う
+          if [ -n "$DEPLOY_KEY" ]; then
+            mkdir -p ~/.ssh
+            printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            cat > ./ssh-ci << 'SCRIPT'
+          #!/usr/bin/env bash
+          exec ssh -i ~/.ssh/deploy_key "$@"
+          SCRIPT
+          elif [ -n "$DEPLOY_PASS" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+            cat > ./ssh-ci << 'SCRIPT'
+          #!/usr/bin/env bash
+          # パスワードをプロセスリストに出さないよう sshpass -e で環境変数経由にする
+          exec env SSHPASS="$DEPLOY_PASS" sshpass -e ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no "$@"
+          SCRIPT
+          else
+            echo "::error::DEPLOY_KEY か DEPLOY_PASS のどちらかを設定してください"
+            exit 1
+          fi
+          chmod +x ./ssh-ci
           # DEPLOY_HOST は Tailscale 上の宛先(MagicDNS名 or 100.x.x.x)を指定する
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
           APPSETTINGS_JSON: ${{ secrets.APPSETTINGS_JSON }}
         run: |
           DEPLOY_DIR="/var/www/qrqueue/publish"
+          SSH="$PWD/ssh-ci"
 
           echo "Deploying to: $DEPLOY_DIR"
 
-          # サービスファイルをアップロード
-          scp -i ~/.ssh/deploy_key .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
+          # サービスファイルをアップロード(-S で ssh の代わりにラッパーを使う)
+          scp -S "$SSH" .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
 
           # ファイルをアップロード（in-place上書き）
           # vapid_keys.json はデプロイで消すと既存のPush購読が全滅するため除外
           # (サーバー側では Vapid:KeysFilePath で配布物の外へ出すのが望ましい)
-          rsync -avz --delete --exclude=vapid_keys.json -e "ssh -i ~/.ssh/deploy_key" \
+          rsync -avz --delete --exclude=vapid_keys.json -e "$SSH" \
             ./publish-output/ \
             ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/
 
           # appsettings.json を配置してサービス再起動
           APPSETTINGS_B64=$(echo -n "${APPSETTINGS_JSON}" | base64 -w 0)
 
-          ssh -i ~/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_HOST} "APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
+          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
 
           # サービスファイルを更新
           mv /tmp/qrqueue.service /etc/systemd/system/qrqueue.service
