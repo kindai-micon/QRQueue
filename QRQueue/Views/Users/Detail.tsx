@@ -1,6 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-import type { SendRole, SendUser } from "@/Shared/api";
+import { readErrorMessage, type SendRole, type SendUser } from "@/Shared/api";
 
 type Model = {
     username: string;
@@ -15,6 +15,11 @@ export default function Detail({ model }: { model: Model }) {
     const [availableRoles, setAvailableRoles] = useState<SendRole[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [roleToRemove, setRoleToRemove] = useState<SendRole | null>(null);
+    const [resetPassword, setResetPassword] = useState("");
+    const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+    const [showResetPassword, setShowResetPassword] = useState(false);
+    const [resetError, setResetError] = useState<string | null>(null);
+    const [resetSubmitting, setResetSubmitting] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -88,6 +93,49 @@ export default function Detail({ model }: { model: Model }) {
         setShowModal(false);
     }
 
+    // 管理者によるパスワード再設定(現在のパスワードは不要)
+    async function resetPasswordSubmit(e: Event) {
+        e.preventDefault();
+        if (!user) return;
+        setResetError(null);
+
+        if (!resetPassword || !resetConfirmPassword) {
+            setResetError("すべての項目を入力してください。");
+            return;
+        }
+        if (resetPassword !== resetConfirmPassword) {
+            setResetError("パスワードが一致しません。");
+            return;
+        }
+        setResetSubmitting(true);
+
+        try {
+            const response = await fetch("/api/user/ResetPassword", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userName: user.userName,
+                    newPassword: resetPassword,
+                    confirmPassword: resetConfirmPassword,
+                }),
+            });
+
+            if (response.ok) {
+                setResetPassword("");
+                setResetConfirmPassword("");
+                alert("パスワードを変更しました。");
+            } else {
+                // 統一エラー形式 ApiMessage(IdentityError もサーバー側で結合済み)
+                setResetError(await readErrorMessage(response));
+            }
+        } catch (err) {
+            console.log(err);
+            setResetError("通信エラーが発生しました。");
+        } finally {
+            setResetSubmitting(false);
+        }
+    }
+
     return (
         <Layout title="ユーザー詳細 | QRQueue">
             <link rel="stylesheet" href="/css/users-detail.css" />
@@ -121,6 +169,42 @@ export default function Detail({ model }: { model: Model }) {
                         <div class="section">
                             <div class="label">ユーザー名:</div>
                             <div>{user.userName}</div>
+                        </div>
+                        <div class="section">
+                            <div class="label">パスワード再設定:</div>
+                            {resetError && <p class="error">{resetError}</p>}
+                            <form style={{ marginTop: "8px" }} onSubmit={resetPasswordSubmit}>
+                                <div class="form-group">
+                                    <label for="resetPassword">新しいパスワード</label>
+                                    <div class="password-input">
+                                        <input
+                                            type={showResetPassword ? "text" : "password"}
+                                            id="resetPassword"
+                                            value={resetPassword}
+                                            autoComplete="new-password"
+                                            onInput={(e) => setResetPassword(e.currentTarget.value)}
+                                        />
+                                        <button type="button" class="password-toggle" onClick={() => setShowResetPassword(!showResetPassword)}>
+                                            {showResetPassword ? "非表示" : "表示"}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="resetConfirmPassword">新しいパスワード（確認）</label>
+                                    <div class="password-input">
+                                        <input
+                                            type={showResetPassword ? "text" : "password"}
+                                            id="resetConfirmPassword"
+                                            value={resetConfirmPassword}
+                                            autoComplete="new-password"
+                                            onInput={(e) => setResetConfirmPassword(e.currentTarget.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-primary btn-sm" disabled={resetSubmitting}>
+                                    {resetSubmitting ? "変更中..." : "パスワードを変更"}
+                                </button>
+                            </form>
                         </div>
                         <div class="section">
                             <div class="label">ロール一覧:</div>
