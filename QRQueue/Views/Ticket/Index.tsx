@@ -13,6 +13,7 @@ export default function Index({ model }: { model: Model }) {
     const [loaded, setLoaded] = useState(false);
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
 
     // 「ホーム画面に追加」導線:  standalone で開いていないときだけ案内
@@ -34,14 +35,11 @@ export default function Index({ model }: { model: Model }) {
 
             if ("serviceWorker" in navigator) {
                 navigator.serviceWorker.register("/service-worker.js");
-                navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription()).then((sub) => {
-                    if (!sub && list.includes(model.ticketId)) {
-                        const updated = list.filter((v) => v !== model.ticketId);
-                        setNotifications(updated);
-                        setNotification(false);
-                        localStorage.setItem("notifications", JSON.stringify(updated));
-                    }
-                });
+                // 「登録」済みの端末は表示のたびにサーバーへ再同期する。
+                // 過去の不具合で購読が保存されていない端末を、ボタンの再操作なしに自己修復する
+                navigator.serviceWorker.ready
+                    .then(() => syncNotification(true))
+                    .catch((err) => console.error("通知設定の同期に失敗:", err));
             }
         } catch (err) {
             console.error("通知設定の読み込みに失敗:", err);
@@ -74,71 +72,123 @@ export default function Index({ model }: { model: Model }) {
         return btoa(binary);
     }
 
-    async function subscribeNotification() {
+    // 購読を作成/修復してサーバーへ upsert する。
+    // auto = true はページ表示時の自己修復で、許可を求めず「登録」済みの端末だけ対象にする
+    async function syncNotification(auto: boolean) {
         if (!("serviceWorker" in navigator)) {
+            if (!auto) {
+                setNotice("お使いのブラウザは通知に対応していません(iOS Safariはホーム画面に追加すると使えます)");
+            }
             return;
         }
+        if (auto) {
+            // state はマウント直後でまだ古いので localStorage を直接見る
+            const stored: string[] = JSON.parse(localStorage.getItem("notifications") ?? "[]");
+            if (!stored.includes(model.ticketId)) {
+                return; // 「登録」したことのない端末で勝手に購読しない
+            }
+        }
         const reg = await navigator.serviceWorker.ready;
+        if (!reg.pushManager) {
+            if (!auto) {
+                setNotice("お使いのブラウザは通知に対応していません(iOS Safariはホーム画面に追加すると使えます)");
+            }
+            return;
+        }
         let sub = await reg.pushManager.getSubscription();
 
         if (Notification.permission === "default") {
+            if (auto) {
+                return; // 許可を求めるのはボタン操作のときだけ
+            }
             await Notification.requestPermission();
         }
-
-        if (Notification.permission === "granted") {
-            const publicKey = await getVapidPublicKey();
-
-            // サーバーの鍵と購読時の鍵が違う(サーバー側で鍵が再生成された等)場合、
-            // その購読では送信が必ず失敗するため作り直す
-            const subKey = sub?.options?.applicationServerKey;
-            if (sub && subKey && arrayBufferToBase64(subKey as ArrayBuffer) !== publicKey) {
-                await sub.unsubscribe();
-                sub = null;
+        if (Notification.permission !== "granted") {
+            if (!auto) {
+                setNotice("通知が許可されていません。ブラウザの設定でこのサイトの通知を許可してください");
             }
+            return;
+        }
 
-            if (!sub) {
-                sub = await reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(publicKey),
-                });
+        const publicKey = await getVapidPublicKey();
+
+        // サーバーの鍵と購読時の鍵が違う(サーバー側で鍵が再生成された等)場合、
+        // その購読では送信が必ず失敗するため作り直す
+        const subKey = sub?.options?.applicationServerKey;
+        if (sub && subKey && arrayBufferToBase64(subKey as ArrayBuffer) !== publicKey) {
+            await sub.unsubscribe();
+            sub = null;
+        }
+
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicKey),
+            });
+        }
+
+        // PushSubscription を直接 stringify すると endpoint しか送られないため、
+        // 鍵(p256dh / auth)を明示的に取り出してサーバーと同じ形式で送る
+        const p256dh = sub.getKey("p256dh");
+        const auth = sub.getKey("auth");
+        if (!p256dh || !auth) {
+            console.error("購読の鍵が取得できませんでした");
+            if (!auto) {
+                setNotice("通知の登録に失敗しました(購読の鍵が取得できませんでした)");
             }
+            return;
+        }
 
-            // PushSubscription を直接 stringify すると endpoint しか送られないため、
-            // 鍵(p256dh / auth)を明示的に取り出してサーバーと同じ形式で送る
-            const p256dh = sub.getKey("p256dh");
-            const auth = sub.getKey("auth");
-            if (!p256dh || !auth) {
-                console.error("購読の鍵が取得できませんでした");
-                return;
-            }
-
-            try {
-                const res = await fetch(`/api/push-subscription/${model.ticketId}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        endpoint: sub.endpoint,
-                        keys: {
-                            p256dh: arrayBufferToBase64(p256dh),
-                            auth: arrayBufferToBase64(auth),
-                        },
-                    }),
-                });
-                if (!res.ok) {
-                    console.error("通知の登録に失敗:", res.status, await readErrorMessage(res));
-                    return;
+        try {
+            const res = await fetch(`/api/push-subscription/${model.ticketId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    endpoint: sub.endpoint,
+                    keys: {
+                        p256dh: arrayBufferToBase64(p256dh),
+                        auth: arrayBufferToBase64(auth),
+                    },
+                }),
+            });
+            if (!res.ok) {
+                console.error("通知の登録に失敗:", res.status, await readErrorMessage(res));
+                if (!auto) {
+                    setNotice(`通知の登録に失敗しました(${res.status})`);
                 }
-            } catch (error) {
-                console.error("通知の登録に失敗:", error);
                 return;
             }
+        } catch (error) {
+            console.error("通知の登録に失敗:", error);
+            if (!auto) {
+                setNotice("通知の登録に失敗しました(通信エラー)");
+            }
+            return;
+        }
 
-            setNotification(true);
-            const updated = [...notifications.filter((v) => v !== model.ticketId), model.ticketId];
-            setNotifications(updated);
-            localStorage.setItem("notifications", JSON.stringify(updated));
-        } else {
-            console.warn("通知が許可されていないため登録できません");
+        if (!auto) {
+            setNotice(null);
+        }
+        setNotification(true);
+        const updated = [...notifications.filter((v) => v !== model.ticketId), model.ticketId];
+        setNotifications(updated);
+        localStorage.setItem("notifications", JSON.stringify(updated));
+    }
+
+    // サーバーから実際にプッシュを送らせて届くかを確かめる。
+    // 届かない場合、登録は成功しているのでサーバー側(送信処理)の問題と切り分けられる
+    async function sendTestNotification() {
+        setNotice(null);
+        try {
+            const res = await fetch(`/api/push-subscription/${model.ticketId}/test`, { method: "POST" });
+            const data = await res.json().catch(() => null);
+            setNotice(data?.message ?? (res.ok ? "テスト通知を送信しました" : `テスト通知の送信に失敗しました(${res.status})`));
+            if (!res.ok) {
+                console.error("テスト通知の送信に失敗:", res.status, data);
+            }
+        } catch (error) {
+            console.error("テスト通知の送信に失敗:", error);
+            setNotice("テスト通知の送信に失敗しました(通信エラー)");
         }
     }
 
@@ -229,12 +279,18 @@ export default function Index({ model }: { model: Model }) {
             {loaded ? (
                 ticketData ? (
                     <div class="container">
-                        <button
-                            class={`notification-btn ${notification ? "notification-registration" : "notification-no-registration"}`}
-                            onClick={subscribeNotification}
-                        >
-                            呼び出し通知{notification ? "登録済み✔" : "登録"}
-                        </button>
+                        <div class="notification-actions">
+                            <button
+                                class={`notification-btn ${notification ? "notification-registration" : "notification-no-registration"}`}
+                                onClick={() => syncNotification(false)}
+                            >
+                                呼び出し通知{notification ? "登録済み✔" : "登録"}
+                            </button>
+                            <button class="notification-test-btn" onClick={sendTestNotification}>
+                                テスト通知
+                            </button>
+                        </div>
+                        {notice && <div class="notification-notice">{notice}</div>}
                         <div class="header">
                             <h1>{ticketData.eventName ?? "電子券"}</h1>
                             <p>あなたの参加証(この画面が唯一の参加証です)</p>

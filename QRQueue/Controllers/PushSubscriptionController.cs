@@ -13,11 +13,30 @@ namespace QRQueue.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly IVapidService _service;
+        private readonly IPushSubscriptionService _pushSubscriptionService;
 
-        public PushSubscriptionController(ApplicationDbContext applicationDbContext,IVapidService vapidService)
+        public PushSubscriptionController(ApplicationDbContext applicationDbContext,IVapidService vapidService,IPushSubscriptionService pushSubscriptionService)
         {
             _db = applicationDbContext;
             _service = vapidService;
+            _pushSubscriptionService = pushSubscriptionService;
+        }
+
+        // 実際にプッシュを送らせて端末まで届くかを確かめる(来ない問題の切り分け用)
+        [HttpPost("{guid}/test")]
+        public async Task<IActionResult> SendTest([FromRoute] Guid guid)
+        {
+            var report = await _pushSubscriptionService.SendTestAsync(guid);
+
+            if (report.Subscriptions == 0)
+            {
+                return NotFound(new ApiMessage("このチケットの通知設定がありません。先に「呼び出し通知 登録」を押してください"));
+            }
+            if (report.Sent == 0)
+            {
+                return StatusCode(500, new ApiMessage("サーバーからの通知送信に失敗しました: " + string.Join("; ", report.Errors)));
+            }
+            return Ok(new ApiMessage("テスト通知を送信しました。届かない場合は端末の通知許可・ホーム画面に追加を確認してください"));
         }
 
         [HttpPost("{guid}")]

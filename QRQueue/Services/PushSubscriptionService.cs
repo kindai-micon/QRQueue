@@ -9,10 +9,22 @@ namespace QRQueue.Services
     public class PushSubscriptionService(
         IConfiguration configuration,
         IVapidService vapidService,
-        IServiceScopeFactory scopeFactory) : IPushSubscriptionService
+        IServiceScopeFactory scopeFactory,
+        ILogger<PushSubscriptionService> logger) : IPushSubscriptionService
     {
         public async Task SendNotifyTicketGroupAsync(List<Ticket> tickets, string title, string message)
         {
+            await SendCoreAsync(tickets.Select(t => t.DisplayId), title, message);
+        }
+
+        public Task<PushSendReport> SendTestAsync(Guid displayId)
+        {
+            return SendCoreAsync([displayId], "テスト通知", "QRQueueのテスト通知です。この通知が届けば設定は完了しています。");
+        }
+
+        private async Task<PushSendReport> SendCoreAsync(IEnumerable<Guid> displayIds, string title, string message)
+        {
+            var errors = new List<string>();
             try
             {
                 using var scope = scopeFactory.CreateScope();
@@ -29,11 +41,20 @@ namespace QRQueue.Services
                 );
 
                 var webPushClient = new WebPushClient();
-                var displayids = tickets.Select(t => t.DisplayId).ToList();
+                var ids = displayIds.ToList();
                 var subscriptions = await db.PushSubscriptions
-                    .Where(s => displayids.Contains(s.DisplayId))
+                    .Where(s => ids.Contains(s.DisplayId))
                     .ToListAsync();
 
+                // 届かないときに原因がまったく分からなくならないよう、件数と成否を必ずログへ出す
+                logger.LogInformation("Push: 対象{Count}件に送信を開始 (title={Title})", subscriptions.Count, title);
+                if (subscriptions.Count == 0)
+                {
+                    logger.LogWarning("Push: 送信対象の購読が0件 (displayIds={Ids})", string.Join(",", ids));
+                    return new PushSendReport(0, 0, ["このチケットの購読が登録されていません"]);
+                }
+
+                var sent = 0;
                 foreach (var subscription in subscriptions)
                 {
                     var pushSubscription = new WebPush.PushSubscription(
@@ -56,6 +77,7 @@ namespace QRQueue.Services
                             payload,
                             vapidDetails
                         );
+                        sent++;
                     }
                     catch (WebPushException ex)
                     {
@@ -66,18 +88,24 @@ namespace QRQueue.Services
                         }
                         else
                         {
-                            Console.WriteLine($"Push send failed ({(int)ex.StatusCode}): {ex.Message}");
+                            logger.LogWarning("Push送信失敗 ({Status}): {Message}", (int)ex.StatusCode, ex.Message);
+                            errors.Add($"{(int)ex.StatusCode}: {ex.Message}");
                         }
                     }
                 }
 
                 await db.SaveChangesAsync();
+                logger.LogInformation("Push: {Sent}/{Count}件を送信", sent, subscriptions.Count);
+                return new PushSendReport(subscriptions.Count, sent, errors);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Push batch error: {ex}");
+                logger.LogError(ex, "Push送信で予期しないエラー");
+                errors.Add(ex.Message);
+                return new PushSendReport(0, 0, errors);
             }
         }
+
         public async Task SendNotifyTicketAsync(Ticket ticket, string title, string message)
         {
             await SendNotifyTicketGroupAsync(new List<Ticket>() { ticket }, title, message);
