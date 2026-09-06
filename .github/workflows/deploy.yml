@@ -16,6 +16,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # JsxCore がビューをビルド時にコンパイルするのに TypeScript を使う。
+      # これが無いと JSX0001 警告が出てビュー未コンパイルのまま配布され、
+      # サーバー起動時のコンパイルにフォールバックして SSR が壊れる
+      - name: Install npm dependencies (TypeScript for JsxCore)
+        run: npm ci
+        working-directory: QRQueue
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -29,6 +36,15 @@ jobs:
 
       - name: Publish
         run: dotnet publish QRQueue/QRQueue.csproj --configuration Release --no-build --output ./publish-output
+
+      # 安全網: ビューがビルド時にコンパイルされていなければサーバーで SSR が壊れるので、
+      # この段階で確実に失敗させる
+      - name: Verify views were compiled
+        run: |
+          if [ ! -d ./publish-output/obj/JsxCore/js ]; then
+            echo "::error::JsxCore view JS was not produced at build time. Check the npm install step and the JSX0001 warning."
+            exit 1
+          fi
 
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
