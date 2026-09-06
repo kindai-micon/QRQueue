@@ -9,6 +9,9 @@
     font-size: 1rem;
 }
 .event-list { display: grid; gap: 1rem; }
+.event-row { display: flex; gap: 0.5rem; align-items: stretch; }
+.event-row .event-item { flex: 1; }
+.event-row .btn-danger { flex-shrink: 0; }
 .event-item {
     padding: 1rem;
     border: 1px solid #ccc;

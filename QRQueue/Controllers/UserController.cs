@@ -202,6 +202,63 @@ namespace QRQueue.Controllers
             return Ok();
         }
 
+        [Authorize]
+        [HttpPost(nameof(ChangePassword))]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordModel model)
+        {
+            if (model.NewPassword != model.ConfirmPassword)
+            {
+                return BadRequest(new ApiMessage("新しいパスワードが一致しません"));
+            }
+            var user = await userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return NotFound();
+            }
+            var result = await userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors.ToApiMessage());
+            }
+            // SecurityStamp 更新後もセッションを維持するため Cookie を再発行する
+            await signInManager.RefreshSignInAsync(user);
+            return Ok();
+        }
+
+        /// <summary>管理者(UserManagement 権限)による他ユーザーのパスワード再設定。現在のパスワードは不要</summary>
+        [Authorize(Policy = "UserView")]
+        [Authorize(Policy = "UserManagement")]
+        [HttpPost(nameof(ResetPassword))]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordModel model)
+        {
+            if (model.NewPassword != model.ConfirmPassword)
+            {
+                return BadRequest(new ApiMessage("新しいパスワードが一致しません"));
+            }
+            var user = await userManager.FindByNameAsync(model.UserName);
+            if (user == null)
+            {
+                return NotFound(new ApiMessage("ユーザーが見つかりません"));
+            }
+            var result = await userManager.RemovePasswordAsync(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors.ToApiMessage());
+            }
+            result = await userManager.AddPasswordAsync(user, model.NewPassword);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors.ToApiMessage());
+            }
+            // 自分自身のパスワードを変更した場合は SecurityStamp 更新後もセッションを維持する
+            var my = await userManager.GetUserAsync(User);
+            if (my?.Id == user.Id)
+            {
+                await signInManager.RefreshSignInAsync(my);
+            }
+            return Ok();
+        }
+
         [Authorize(Policy="UserView")]
         [HttpGet(nameof(UserList))]
         public async Task<ActionResult<List<SendUser>>> UserList()

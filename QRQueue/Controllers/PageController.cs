@@ -24,6 +24,10 @@ namespace QRQueue.Controllers
         [HttpGet("/login")]
         public IActionResult Login() => Page("Login/Index", new { });
 
+        // ログイン中ユーザー自身のパスワード変更ページ
+        [HttpGet("/account/password")]
+        public IActionResult ChangePassword() => Page("Account/Password", new { });
+
         [HttpGet("/roles")]
         public IActionResult Roles() => Page("Roles/Index", new { });
 

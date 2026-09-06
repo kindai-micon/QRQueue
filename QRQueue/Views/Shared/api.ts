@@ -126,6 +126,13 @@ export type PasscodeView = {
     passcode: string;
 };
 
+// POST /api/user/ChangePassword のリクエスト(ChangePasswordModel)
+export type ChangePasswordModel = {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+};
+
 // === Web Push(Models/API/PushViews.cs) ===
 // GET /api/push-subscription/vapid-public-key のレスポンス(VapidPublicKeyView)
 export type VapidPublicKeyView = {
