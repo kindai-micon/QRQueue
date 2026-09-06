@@ -133,7 +133,7 @@ export default function Index() {
                     <div class="event-list">
                         {events.map((item) => (
                             <div class="event-row" key={item.id}>
-                                <a class="event-item" href={`/event/${encodeURIComponent(item.id)}`}>
+                                <a class="event-name" href={`/event/${encodeURIComponent(item.id)}`}>
                                     {item.name}
                                 </a>
                                 <button class="btn-danger btn-sm" onClick={() => confirmDelete(item)}>削除</button>
