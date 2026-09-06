@@ -35,6 +35,11 @@ namespace QRQueue.Services
                         // 読み取り案内
                         col.Item().AlignCenter().PaddingTop(28)
                             .Text(instruction).FontSize(18).Medium();
+
+                        // クレジット
+                        col.Item().AlignCenter().PaddingTop(24)
+                            .Text("Powered by 近畿大学プログラミング研究部").FontSize(10)
+                            .FontColor(Colors.Grey.Darken1);
                     });
                 });
             }).GeneratePdf();
