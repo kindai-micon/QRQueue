@@ -27,3 +27,12 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .desc { font-size: 0.9rem; color: #666; margin-top: 0.25rem; }
+.danger-zone {
+    margin-top: 3rem;
+    padding: 1rem 1.5rem;
+    border: 1px solid #e74c3c;
+    border-radius: 0.75rem;
+    background: #fdf0ef;
+}
+.danger-title { font-weight: bold; color: #c0392b; }
+.danger-desc { font-size: 0.9rem; color: #666; margin: 0.5rem 0 1rem; }
