@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import MessageModal from "@/Shared/Modal";
 import { readErrorMessage } from "@/Shared/api";
 
 // ログイン中ユーザー自身のパスワード変更ページ
@@ -10,6 +11,7 @@ export default function Password() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
 
     async function changePassword(e: Event) {
         e.preventDefault();
@@ -37,7 +39,7 @@ export default function Password() {
             });
 
             if (response.ok) {
-                alert("パスワードを変更しました。");
+                setNotice("パスワードを変更しました。");
                 setCurrentPassword("");
                 setNewPassword("");
                 setConfirmPassword("");
@@ -56,6 +58,7 @@ export default function Password() {
     return (
         <Layout title="パスワード変更 | QRQueue">
             <link rel="stylesheet" href="/css/account.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="container">
                 <div class="password-form-container">
                     <h2>パスワード変更</h2>
