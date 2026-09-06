@@ -83,6 +83,10 @@ jobs:
 
           echo "Deploying to: $DEPLOY_DIR"
 
+          # 初回実行時に配布先が無いと rsync が落ちるため作成する(2回目以降は冪等)
+          # sudo は既存のリモートスクリプト(systemctl 等)と同じく NOPASSWD を前提
+          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "sudo mkdir -p $DEPLOY_DIR && sudo chown \$(id -u):\$(id -g) $DEPLOY_DIR"
+
           # サービスファイルをアップロード(-S で ssh の代わりにラッパーを使う)
           scp -S "$SSH" .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
 
