@@ -87,7 +87,9 @@ jobs:
           scp -S "$SSH" .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
 
           # ファイルをアップロード（in-place上書き）
-          rsync -avz --delete -e "$SSH" \
+          # vapid_keys.json はデプロイで消すと既存のPush購読が全滅するため除外
+          # (サーバー側では Vapid:KeysFilePath で配布物の外へ出すのが望ましい)
+          rsync -avz --delete --exclude=vapid_keys.json -e "$SSH" \
             ./publish-output/ \
             ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/
 
