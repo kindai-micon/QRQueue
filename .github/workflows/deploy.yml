@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      # Tailscale Workload Identity Federation 用: GitHub OIDC トークンの発行を許可する
+      id-token: write
 
     steps:
       - name: Checkout code
@@ -30,8 +33,10 @@ jobs:
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
         with:
+          # Workload Identity Federation: OAuth シークレット無しで認証する
+          # TS_OAUTH_CLIENT_ID / TS_AUDIENCE には Federated Identity の Client ID / Audience を入れる
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          audience: ${{ secrets.TS_AUDIENCE }}
           tags: tag:ci
           ping: ${{ secrets.DEPLOY_HOST }}
 
