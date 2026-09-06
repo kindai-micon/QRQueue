@@ -198,7 +198,14 @@ namespace QRQueue
                 app.UseHttpsRedirection();
             }
 
-            app.UseStaticFiles();
+            // 静的ファイル(CSS等)は Cache-Control: no-cache で配信し、毎回鮮度検証させる。
+            // 既定のまま(ヘッダー無し)だとブラウザのヒューリスティックキャッシュにより、
+            // HTMLは新しくてCSSだけ古い状態が発生するため(ETag 付きなので未更新時は 304 で高速)
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = ctx =>
+                    ctx.Context.Response.Headers.CacheControl = "no-cache"
+            });
             app.UseJsxCore();
             app.UseRouting();
 
