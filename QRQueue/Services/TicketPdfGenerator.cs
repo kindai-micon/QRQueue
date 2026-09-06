@@ -38,8 +38,8 @@ namespace QRQueue.Services
 
                         // クレジット
                         col.Item().AlignCenter().PaddingTop(24)
-                            .Text("Powered by 近畿大学プログラミング研究部").FontSize(24).Bold()
-                            .FontColor(Colors.Grey.Darken2);
+                            .Text("Powered by 近畿大学プログラミング研究部").FontSize(12)
+                            .FontColor(Colors.Grey.Darken1);
                     });
                 });
             }).GeneratePdf();
