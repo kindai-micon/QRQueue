@@ -8,6 +8,7 @@ const MENU_ITEMS = [
     { name: "ユーザー管理", href: "/users" },
     { name: "ロール管理", href: "/roles" },
     { name: "イベント管理", href: "/event" },
+    { name: "パスワード変更", href: "/account/password" },
 ];
 
 export default function Layout({ children, chrome = "full", title }: { children?: ComponentChildren; chrome?: "full" | "header"; title?: string }) {

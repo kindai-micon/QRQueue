@@ -1,0 +1,11 @@
+/* QRQueue/Views/Account/Password.tsx 用スタイル(共通部分は site.css) */
+.container { max-width: 800px; margin: 20px auto; padding: 10px; }
+.password-form-container {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 40px auto;
+    max-width: 600px;
+    background-color: #fafafa;
+}
+.password-form-container h2 { margin-bottom: 20px; }
