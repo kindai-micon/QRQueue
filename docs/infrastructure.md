@@ -1,6 +1,7 @@
 # インフラ構成
 
 QRQueue のインフラ構成図(Mermaid)。デプロイ経路は PR #17 により Tailscale 経由の SSH。
+各図の PNG は `images/` 配下に同梱(`mmdc -i <>.mmd -o <>.png -s 2 -b white` で再生成可能)。
 
 ## 全体構成
 
@@ -26,6 +27,8 @@ flowchart LR
     APP -- "Web Push (VAPID)" --> PUSH
     PUSH -- "呼び出し通知" --> P
 ```
+
+![全体構成](images/infrastructure-overall.png)
 
 - アプリは `ASPNETCORE_URLS=http://*:5000` で待ち受け(`.deploy/qrqueue.service`)
 - DB 接続文字列は GitHub Secrets `APPSETTINGS_JSON` 経由で `appsettings.json` として配置
@@ -55,6 +58,8 @@ sequenceDiagram
     A->>S: appsettings.json 配置 + systemctl restart
 ```
 
+![デプロイフロー](images/deploy-flow.png)
+
 - runner は `tag:ci` 付きの ephemeral ノードで、ワークフロー終了後に自動削除される
 - 接続先 `DEPLOY_HOST` は MagicDNS 名または Tailscale IP(`100.x.x.x`)
 - サーバーのSSHを公開インターネットに晒す必要がない
@@ -70,3 +75,5 @@ flowchart LR
     AH --> PG[("PostgreSQL コンテナ<br/>(Docker Desktop)")]
     APP --- PG
 ```
+
+![開発環境](images/dev-env.png)
