@@ -47,6 +47,16 @@ export default function Layout({ children, chrome = "full", title }: { children?
         }
     }, [checked, userName]);
 
+    async function handleLogout() {
+        try {
+            await fetch("/api/user/Logout", { method: "POST" });
+        } catch (error) {
+            console.error("ログアウトに失敗:", error);
+        } finally {
+            window.location.href = "/login";
+        }
+    }
+
     return (
         <div>
             {title && <title>{title}</title>}
@@ -71,6 +81,7 @@ export default function Layout({ children, chrome = "full", title }: { children?
                                     {item.name}
                                 </a>
                             ))}
+                            <button class="logout-link" onClick={handleLogout}>ログアウト</button>
                         </nav>
                     </div>
                 )}
@@ -81,6 +92,7 @@ export default function Layout({ children, chrome = "full", title }: { children?
                                 {MENU_ITEMS.map((item) => (
                                     <a key={item.href} href={item.href}>{item.name}</a>
                                 ))}
+                                <button class="logout-link" onClick={handleLogout}>ログアウト</button>
                             </nav>
                         </aside>
                     )}
