@@ -1,7 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
-import { TICKET_STATUS_LABEL, type TicketView, type VapidPublicKeyView } from "@/Shared/api";
+import { readErrorMessage, TICKET_STATUS_LABEL, type TicketView, type VapidPublicKeyView } from "@/Shared/api";
 
 type Model = {
     ticketId: string;
@@ -67,6 +67,13 @@ export default function Index({ model }: { model: Model }) {
         return view;
     }
 
+    function arrayBufferToBase64(buffer: ArrayBuffer): string {
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        bytes.forEach((b) => { binary += String.fromCharCode(b); });
+        return btoa(binary);
+    }
+
     async function subscribeNotification() {
         const reg = await navigator.serviceWorker.ready;
         let sub = await reg.pushManager.getSubscription();
@@ -86,14 +93,34 @@ export default function Index({ model }: { model: Model }) {
                         });
                     }
 
+                    // PushSubscription を直接 stringify すると endpoint しか送られないため、
+                    // 鍵(p256dh / auth)を明示的に取り出してサーバーと同じ形式で送る
+                    const p256dh = sub.getKey("p256dh");
+                    const auth = sub.getKey("auth");
+                    if (!p256dh || !auth) {
+                        console.error("購読の鍵が取得できませんでした");
+                        return;
+                    }
+
                     try {
-                        await fetch(`/api/push-subscription/${model.ticketId}`, {
+                        const res = await fetch(`/api/push-subscription/${model.ticketId}`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(sub),
+                            body: JSON.stringify({
+                                endpoint: sub.endpoint,
+                                keys: {
+                                    p256dh: arrayBufferToBase64(p256dh),
+                                    auth: arrayBufferToBase64(auth),
+                                },
+                            }),
                         });
+                        if (!res.ok) {
+                            console.error("通知の登録に失敗:", res.status, await readErrorMessage(res));
+                            return;
+                        }
                     } catch (error) {
-                        console.error("Error loading data:", error);
+                        console.error("通知の登録に失敗:", error);
+                        return;
                     }
 
                     setNotification(true);
