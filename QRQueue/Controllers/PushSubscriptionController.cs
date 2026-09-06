@@ -25,6 +25,14 @@ namespace QRQueue.Controllers
             [FromRoute] Guid guid,
             [FromBody] PushSubscriptionDTO subscriptionDTO)
         {
+            // 鍵の無い購読は送信時に必ず失敗するため弾く
+            if (string.IsNullOrEmpty(subscriptionDTO?.Endpoint)
+                || string.IsNullOrEmpty(subscriptionDTO.Keys?.P256dh)
+                || string.IsNullOrEmpty(subscriptionDTO.Keys?.Auth))
+            {
+                return BadRequest(new ApiMessage("Invalid push subscription"));
+            }
+
             // 同じチケットで再登録されたら上書きし、重複通知を防ぐ
             var existing = await _db.PushSubscriptions
                 .FirstOrDefaultAsync(s => s.DisplayId == guid);
