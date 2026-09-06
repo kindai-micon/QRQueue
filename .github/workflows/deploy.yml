@@ -102,17 +102,18 @@ jobs:
 
           "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
 
-          # サービスファイルを更新
-          mv /tmp/qrqueue.service /etc/systemd/system/qrqueue.service
-          systemctl daemon-reload
+          # サービスファイルを更新(システム領域なので sudo が要る。
+          # DEPLOY_USER 向けに sudoers で NOPASSWD 許可が必要 — PR #24 の説明参照)
+          sudo mv /tmp/qrqueue.service /etc/systemd/system/qrqueue.service
+          sudo systemctl daemon-reload
 
           DEPLOY_DIR="/var/www/qrqueue/publish"
 
-          # appsettings.json を配置（base64デコード）
+          # appsettings.json を配置（base64デコード。DEPLOY_DIR は chown 済みなので sudo 不要）
           echo "$APPSETTINGS_B64" | base64 -d > $DEPLOY_DIR/appsettings.json
 
           # サービスを再起動
-          systemctl restart qrqueue.service
+          sudo systemctl restart qrqueue.service
 
           echo "Service restarted successfully"
 
