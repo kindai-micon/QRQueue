@@ -35,10 +35,6 @@ namespace QRQueue.Services
                         // 読み取り案内
                         col.Item().AlignCenter().PaddingTop(28)
                             .Text(instruction).FontSize(18).Medium();
-
-                        // 補足: フォールバック用の素 URL(券ではなく掲示物 §8)
-                        col.Item().AlignCenter().PaddingTop(14)
-                            .Text($"直接入力: {url}").FontSize(10).FontColor(Colors.Grey.Darken1);
                     });
                 });
             }).GeneratePdf();
