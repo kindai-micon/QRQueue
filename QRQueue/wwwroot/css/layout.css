@@ -10,7 +10,7 @@ body { margin: 0; font-family: sans-serif; }
 }
 .header-left { display: flex; align-items: center; }
 .menu-button {
-    display: none; font-size: 1.5rem; background: none; border: none;
+    display: none; font-size: 1rem; background: none; border: none;
     color: white; cursor: pointer; margin-right: 1rem;
 }
 .layout-title { font-size: 1.2rem; font-weight: bold; }

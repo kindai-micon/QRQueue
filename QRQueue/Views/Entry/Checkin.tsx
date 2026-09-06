@@ -80,7 +80,6 @@ export default function Checkin({ model }: { model: Model }) {
             <div class="checkin-container">
                 {notFound && (
                     <div class="checkin-card checkin-card-error">
-                        <h1>❌</h1>
                         <h2>イベントが見つかりません</h2>
                         <p>掲示されているQRが古い可能性があります。受付のスタッフにお尋ねください。</p>
                     </div>
@@ -112,7 +111,6 @@ export default function Checkin({ model }: { model: Model }) {
 
                 {ev && result && (
                     <div class="checkin-card checkin-card-done">
-                        <div class="checkin-done-icon">✓</div>
                         <h1>受付完了</h1>
                         <div class="checkin-done-label">グループ番号</div>
                         <div class="checkin-done-number">{result.groupNumber}</div>

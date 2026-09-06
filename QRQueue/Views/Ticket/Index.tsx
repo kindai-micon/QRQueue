@@ -196,7 +196,7 @@ export default function Index({ model }: { model: Model }) {
                             class={`notification-btn ${notification ? "notification-registration" : "notification-no-registration"}`}
                             onClick={subscribeNotification}
                         >
-                            呼び出し通知{notification ? "登録済み✔" : "登録"}
+                            呼び出し通知{notification ? "登録済み" : "登録"}
                         </button>
                         <div class="header">
                             <h1>{ticketData.eventName ?? "電子券"}</h1>
@@ -235,7 +235,6 @@ export default function Index({ model }: { model: Model }) {
 
                         {isCalling && ticketData.isRepresentative && (
                             <div class="alert-box alert-calling">
-                                <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>🔔</div>
                                 <div>呼び出されました！</div>
                                 <div class="alert-sub">
                                     メンバーがそろうと受付のチェックインQRを読み取ってください。
@@ -273,7 +272,6 @@ export default function Index({ model }: { model: Model }) {
 
                         {ticketData.status === "Completed" && (
                             <div class="alert-box alert-completed">
-                                <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>✓</div>
                                 <div>受付完了</div>
                                 <div class="alert-sub">受付が完了しました</div>
                             </div>
@@ -297,7 +295,7 @@ export default function Index({ model }: { model: Model }) {
                         {!homeHintHidden && (
                             <div class="home-hint">
                                 <div>
-                                    <strong>📱 後で見るには</strong>
+                                    <strong>後で見るには</strong>
                                     ：ブラウザメニューの「ホーム画面に追加」でこの電子券を再訪できます
                                     (URLを紛失しても、この端末なら自動で復元されます)。
                                 </div>
@@ -308,7 +306,7 @@ export default function Index({ model }: { model: Model }) {
                                         setHomeHintHidden(true);
                                     }}
                                 >
-                                    ✕ 閉じる
+                                    閉じる
                                 </button>
                             </div>
                         )}
@@ -316,7 +314,6 @@ export default function Index({ model }: { model: Model }) {
                 ) : (
                     <div class="container">
                         <div class="loading">
-                            <div style={{ fontSize: "1.5rem", marginBottom: "1rem" }}>❌</div>
                             <p>チケット情報が見つかりません</p>
                             <p style={{ fontSize: "0.9rem", marginTop: "1rem", color: "#999" }}>
                                 QRコードをもう一度読み込んでください

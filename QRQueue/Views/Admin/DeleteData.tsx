@@ -19,7 +19,7 @@ export default function DeleteData() {
             return;
         }
 
-        if (!confirm("⚠️ 本当にすべてのデータを削除しますか？\n\nこの操作は取り消せません。")) {
+        if (!confirm("本当にすべてのデータを削除しますか？\n\nこの操作は取り消せません。")) {
             return;
         }
 
@@ -57,17 +57,16 @@ export default function DeleteData() {
         <Layout title="データ削除 | QRQueue">
             <link rel="stylesheet" href="/css/admin-delete-data.css" />
             <div class="delete-container">
-                <div class="page-title">⚠️ すべてのデータを削除</div>
+                <div class="page-title">すべてのデータを削除</div>
 
                 {deleteSuccess ? (
                     <div class="success">
-                        ✓ すべてのデータが削除されました。<br />
+                        すべてのデータが削除されました。<br />
                         3秒後にログイン画面に移動します...
                     </div>
                 ) : (
                     <>
                         <div class="warning-box">
-                            <div class="warning-icon">⚠️</div>
                             <div class="warning-text">削除前に必ずお読みください</div>
                             <div class="warning-description">
                                 <p>この操作により、以下のすべてのデータが<strong>完全に削除</strong>されます：</p>

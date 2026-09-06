@@ -55,14 +55,14 @@ export default function Layout({ children, chrome = "full", title }: { children?
                 <header class="layout-header">
                     <div class="header-left">
                         {chrome === "full" && (
-                            <button class="menu-button" onClick={() => setDrawerOpen(!drawerOpen)}>☰</button>
+                            <button class="menu-button" onClick={() => setDrawerOpen(!drawerOpen)}>メニュー</button>
                         )}
                         <div class="layout-title">QRQueue 管理システム</div>
                     </div>
                 </header>
                 {drawerOpen && (
                     <div class="drawer">
-                        <button class="drawer-close" onClick={() => setDrawerOpen(false)}>✖ 閉じる</button>
+                        <button class="drawer-close" onClick={() => setDrawerOpen(false)}>閉じる</button>
                         <nav>
                             {MENU_ITEMS.map((item) => (
                                 <a key={item.href} href={item.href} onClick={() => setDrawerOpen(false)}>

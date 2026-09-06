@@ -171,14 +171,14 @@ export default function Call({ model }: { model: Model }) {
                         disabled={busy}
                         onClick={() => action("next", () => fetch(`/api/call/next/${model.eventId}`, { method: "PUT" }))}
                     >
-                        ▶ 次を呼ぶ
+                        次を呼ぶ
                     </button>
                     <button
                         class="call-again"
                         disabled={busy}
                         onClick={() => action("again", () => fetch(`/api/call/again/${model.eventId}`, { method: "PUT" }), "再呼び出しを送信しました")}
                     >
-                        🔁 再呼び出し
+                        再呼び出し
                     </button>
                 </div>
                 <p class="call-hint">

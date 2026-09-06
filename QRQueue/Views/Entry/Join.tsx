@@ -65,7 +65,6 @@ export default function Join({ model }: { model: Model }) {
 
                 {loaded && notFound && (
                     <div class="join-card join-card-error">
-                        <h1>❌</h1>
                         <h2>この招待QRは無効です</h2>
                         <p>{error ?? "グループが見つかりません。代表者に新しいQRをもらってください。"}</p>
                     </div>

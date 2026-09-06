@@ -31,7 +31,6 @@
 .checkin-error h2 { font-size: 1.05rem; margin: 0 0 0.4rem; }
 .checkin-error p { margin: 0; font-size: 0.9rem; }
 .checkin-card-done { border: 2px solid #4caf50; }
-.checkin-done-icon { font-size: 2.5rem; color: #2e7d32; }
 .checkin-done-label { color: #666; font-size: 0.9rem; margin-top: 0.8rem; }
 .checkin-done-number {
     font-size: 3rem; font-weight: bold; color: #333;
