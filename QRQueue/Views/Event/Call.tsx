@@ -7,9 +7,9 @@ type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 呼び出しコンソール(設計§9.1 /event/[eventid]/call、旧 execute 置換)。
+// 呼び出しコンソール(設計書 /event/[eventid]/call、旧 execute 置換)。
 // 操作は「受付開閉」「次を呼ぶ」「再呼び出し」のみ。完了は参加者のチェックインで確定するため
-// 完了ボタンは置かない(§4.6)。
+// 完了ボタンは置かない。
 export default function Call({ model }: { model: Model }) {
     const [ev, setEv] = useState<EventInfoView | null>(null);
     const [queue, setQueue] = useState<QueueView | null>(null);
@@ -182,7 +182,7 @@ export default function Call({ model }: { model: Model }) {
                     </button>
                 </div>
                 <p class="call-hint">
-                    「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します(§4.6)。
+                    「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します。
                 </p>
 
                 {message && <div class="call-message">{message}</div>}

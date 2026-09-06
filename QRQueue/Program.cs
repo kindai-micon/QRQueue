@@ -56,7 +56,7 @@ namespace QRQueue
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
             builder.Services.AddSingleton<IQrCodeGenerator, QrCodeGenerator>();
-            // QR に埋める BaseURL 解決の共通化(設計§8)
+            // QR に埋める BaseURL 解決の共通化(設計書)
             builder.Services.AddSingleton<IBaseUrlResolver, BaseUrlResolver>();
             builder.Services.AddScoped<IGroupNumberIssuanceService, GroupNumberIssuanceService>();
             builder.Services.AddScoped<IQueueCallService, QueueCallService>();
@@ -133,7 +133,7 @@ namespace QRQueue
             })
             .AddIdentityCookies();
 
-            // 参加者向け 署名付き participantToken cookie(設計§5.2.1)。既定は Identity のまま別スキーム
+            // 参加者向け 署名付き participantToken cookie(設計書)。既定は Identity のまま別スキーム
             builder.Services.AddAuthentication()
             .AddCookie("Participant", options =>
             {

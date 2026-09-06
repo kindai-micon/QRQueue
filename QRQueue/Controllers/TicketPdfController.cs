@@ -22,7 +22,7 @@ public class TicketPdfController : ControllerBase
     }
 
     /// <summary>
-    /// 参加登録QRの掲示用PDF(A4・1QR、設計§8)。読み取り先は {base}/entry/{eventDisplayId}。
+    /// 参加登録QRの掲示用PDF(A4・1QR)。読み取り先は {base}/entry/{eventDisplayId}。
     /// 券ではなく掲示物で、これ自体は参加証にならない。
     /// </summary>
     [Authorize(Policy = "TicketPublish")]
@@ -39,7 +39,7 @@ public class TicketPdfController : ControllerBase
     }
 
     /// <summary>
-    /// チェックインQRの掲示用PDF(A4・1QR、設計§8/§4.6)。受付に掲示し、
+    /// チェックインQRの掲示用PDF(A4・1QR)。受付に掲示し、
     /// 呼び出し中グループの代表者が読み取ることで受付が確定する。読み取り先は {base}/checkin/{eventDisplayId}。
     /// </summary>
     [Authorize(Policy = "TicketPublish")]

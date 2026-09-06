@@ -7,7 +7,7 @@ type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 投影用画面(設計§9.1 /display/[eventid]、旧 view 置換)。
+// 投影用画面(設計書 /display/[eventid]、旧 view 置換)。
 // 現在呼び出し中を大型表示 + 直近履歴。呼び出し時に強調アニメーションのみ。
 export default function Display({ model }: { model: Model }) {
     const [queue, setQueue] = useState<QueueView | null>(null);

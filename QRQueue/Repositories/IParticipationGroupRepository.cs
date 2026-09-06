@@ -3,7 +3,7 @@ using QRQueue.Models;
 namespace QRQueue.Repositories
 {
     /// <summary>
-    /// 参加グループのデータアクセス(設計書 §5.2・§5.3)
+    /// 参加グループのデータアクセス(設計書)
     /// </summary>
     public interface IParticipationGroupRepository
     {

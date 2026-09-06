@@ -3,7 +3,7 @@ using QRQueue.Models;
 namespace QRQueue.Repositories
 {
     /// <summary>
-    /// イベントのデータアクセス(設計書 §5.2)
+    /// イベントのデータアクセス(設計書)
     /// </summary>
     public interface IEventRepository
     {

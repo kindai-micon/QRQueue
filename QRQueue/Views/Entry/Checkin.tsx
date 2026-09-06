@@ -6,7 +6,7 @@ type Model = {
     eventDisplayId: string;
 };
 
-// チェックインQRの飛び先(設計§9.1 /checkin/[eventid] §4.6)。
+// チェックインQRの飛び先(設計書 /checkin/[eventid])。
 // 参加者cookie を添えて POST /api/entry/checkin を呼ぶ。
 // 失敗時は「まだ確定できません」を表示し、グループの状態は一切変化しない。
 export default function Checkin({ model }: { model: Model }) {
@@ -46,7 +46,7 @@ export default function Checkin({ model }: { model: Model }) {
             if (res.ok) {
                 const data: CheckinResult = await res.json();
                 setResult(data);
-                // 成功時は restore で自分の電子券へ戻る導線を付ける(§6.1)
+                // 成功時は restore で自分の電子券へ戻る導線を付ける
                 try {
                     const restore = await fetch("/api/entry/restore", {
                         method: "POST",

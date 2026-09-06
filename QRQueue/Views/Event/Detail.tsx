@@ -70,7 +70,7 @@ export default function Detail({ model }: { model: Model }) {
                 <div class="nav">
                     <a class="link-card" href={`/event/${model.eventId}/call`}>
                         呼び出しコンソール
-                        <div class="desc">受付開閉・次を呼ぶ・再呼び出し(§4.6)</div>
+                        <div class="desc">受付開閉・次を呼ぶ・再呼び出し</div>
                     </a>
 
                     <a class="link-card" href={`/event/${model.eventId}/queue`}>

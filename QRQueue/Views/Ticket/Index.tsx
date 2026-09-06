@@ -7,7 +7,7 @@ type Model = {
     ticketId: string;
 };
 
-// 電子券画面(参加証そのもの、設計§9.1 /ticket/[ticketid] 改造)
+// 電子券画面(参加証そのもの、設計書 /ticket/[ticketid] 改造)
 export default function Index({ model }: { model: Model }) {
     const [ticketData, setTicketData] = useState<TicketView | null>(null);
     const [loaded, setLoaded] = useState(false);
@@ -15,7 +15,7 @@ export default function Index({ model }: { model: Model }) {
     const [notification, setNotification] = useState(false);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
 
-    // 「ホーム画面に追加」導線(§9.1):  standalone で開いていないときだけ案内
+    // 「ホーム画面に追加」導線:  standalone で開いていないときだけ案内
     useEffect(() => {
         const standalone =
             (navigator as any).standalone === true ||
@@ -146,7 +146,7 @@ export default function Index({ model }: { model: Model }) {
                     .withAutomaticReconnect()
                     .build();
 
-                // 新イベント名(設計§7): UpdateStatus(参加変動) / QueueChanged(キュー変動) / Called(呼び出し)
+                // 新イベント名(設計書): UpdateStatus(参加変動) / QueueChanged(キュー変動) / Called(呼び出し)
                 connection.on("UpdateStatus", load);
                 connection.on("QueueChanged", load);
                 connection.on("Called", load);
