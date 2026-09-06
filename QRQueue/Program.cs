@@ -177,7 +177,11 @@ namespace QRQueue
 
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+                // 既定の信頼対象は IPv6 ループバックのみ。同一ホストの nginx(127.0.0.1 / ::1)経由の
+                // X-Forwarded-* を反映させないと、QRのBaseURLが http:// になったり
+                // UseHttpsRedirection がリダイレクトループを起こす
+                KnownProxies = { System.Net.IPAddress.Parse("127.0.0.1"), System.Net.IPAddress.IPv6Loopback }
             });
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
