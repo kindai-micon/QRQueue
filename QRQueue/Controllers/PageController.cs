@@ -58,7 +58,7 @@ namespace QRQueue.Controllers
         [HttpGet("/ticket/{ticketid}")]
         public IActionResult Ticket(string ticketid) => Page("Ticket/Index", new { ticketId = ticketid });
 
-        // 参加者向け匿名ページ(設計§9.1)
+        // 参加者向け匿名ページ(設計書)
         [HttpGet("/join/{token}")]
         public IActionResult Join(string token) => Page("Entry/Join", new { joinToken = token });
 
@@ -69,7 +69,7 @@ namespace QRQueue.Controllers
         [HttpGet("/display/{eventid}")]
         public IActionResult Display(string eventid) => Page("Display/Index", new { eventId = eventid });
 
-        // 参加登録ページ。有効な参加者cookieがあれば電子券へ復元リダイレクトする(§6.1)
+        // 参加登録ページ。有効な参加者cookieがあれば電子券へ復元リダイレクトする
         [HttpGet("/entry/{eventid}")]
         public async Task<IActionResult> Entry(string eventid)
         {

@@ -7,8 +7,8 @@ type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 掲示物発行画面(設計§9.1 /event/[eventid]/publishing 改造)。
-// 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(§8 / PR#9)。
+// 掲示物発行画面(設計書 /event/[eventid]/publishing 改造)。
+// 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(/ PR#9)。
 export default function Publishing({ model }: { model: Model }) {
     const [ev, setEv] = useState<EventInfoView | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export default function Publishing({ model }: { model: Model }) {
                 <div class="page-title">イベント: {ev?.eventName ?? "..."}</div>
 
                 <p class="publishing-note">
-                    印刷して会場に掲示してください。QRは<strong>掲示物であり参加証ではありません</strong>(§8)。
+                    印刷して会場に掲示してください。QRは<strong>掲示物であり参加証ではありません</strong>。
                 </p>
 
                 <div class="publishing-cards">
@@ -76,7 +76,7 @@ export default function Publishing({ model }: { model: Model }) {
                         <h2>チェックインQR</h2>
                         <p class="publishing-desc">
                             受付に掲示。呼び出されたグループの<strong>代表者</strong>が読むと受付が確定し、
-                            次の呼び出しが自動で進みます(§4.6)。
+                            次の呼び出しが自動で進みます。
                         </p>
                         <button
                             class="btn-primary"

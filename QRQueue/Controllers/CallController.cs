@@ -59,7 +59,7 @@ namespace QRQueue.Controllers
         [HttpPut("next/{eventDisplayId}")]
         public async Task<IActionResult> Next(Guid eventDisplayId)
         {
-            // 「次を呼ぶ」は QueueCallService に一本化(§4.6)。
+            // 「次を呼ぶ」は QueueCallService に一本化。
             // 呼出中の未チェックイングループの割込pool退避・方式②プール自動確定・通知もここで行う。
             var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
             if (ev == null)
@@ -111,7 +111,7 @@ namespace QRQueue.Controllers
         {
             var view = new QueueView();
 
-            // 先頭が「次に呼ぶグループ」になるよう番号順に固定(§4.5 先着順)
+            // 先頭が「次に呼ぶグループ」になるよう番号順に固定(先着順)
             var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).ToListAsync();
 
             var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).OrderBy(x => x.CalledAt).ToListAsync();
