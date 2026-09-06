@@ -114,7 +114,9 @@ jobs:
           # ファイルをアップロード（in-place上書き）
           # vapid_keys.json はデプロイで消すと既存のPush購読が全滅するため除外
           # (サーバー側では Vapid:KeysFilePath で配布物の外へ出すのが望ましい)
-          rsync -avz --delete --exclude=vapid_keys.json -e "$SSH" \
+          # --no-owner --no-group: CIの一般ユーザーでは所有者/グループの保持(chown/chgrp)が
+          # できず code 23(attr転送失敗)になるため、属性保持をやめて実行ユーザー所有にする
+          rsync -avz --no-owner --no-group --delete --exclude=vapid_keys.json -e "$SSH" \
             ./publish-output/ \
             ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/
 
