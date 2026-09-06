@@ -3,7 +3,7 @@ using QRQueue.Models;
 namespace QRQueue.Repositories
 {
     /// <summary>
-    /// チケットのデータアクセス(設計書 §5.2・§6.1)
+    /// チケットのデータアクセス(設計書)
     /// </summary>
     public interface ITicketRepository
     {
@@ -14,13 +14,13 @@ namespace QRQueue.Repositories
 
         /// <summary>
         /// 参加者cookieの participantToken に一致する「このイベントの」有効なチケットを取得
-        /// (二重参加検知 §6.1 join の 409 判定と、電子券の復元で使用)
+        /// (二重参加検知 join の 409 判定と、電子券の復元で使用)
         /// </summary>
         Task<Ticket?> FindActiveByParticipantTokenAsync(Guid participantToken, Guid eventId);
 
         /// <summary>
         /// participantToken に一致する有効な参加(Registered かつ所属グループが生きている)が
-        /// 全イベント中に存在するか。署名付き cookie の検証用(設計§5.2.1)。
+        /// 全イベント中に存在するか。署名付き cookie の検証用(設計書)。
         /// </summary>
         Task<bool> HasActiveTicketAsync(Guid participantToken);
 

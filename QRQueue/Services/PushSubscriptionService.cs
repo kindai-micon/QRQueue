@@ -19,7 +19,7 @@ namespace QRQueue.Services
                 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
                 var vapidSubject = configuration.GetSection("Vapid")["Subject"]
-                    ?? "mailto:qrqueue@example.com";    // 未設定でも送信できるようフォールバック(§設定 Vapid:Subject で上書き可)
+                    ?? "mailto:qrqueue@example.com";    // 未設定でも送信できるようフォールバック(設定 Vapid:Subject で上書き可)
                 var vapidKey = await vapidService.GetOrCreateKeysAsync();
 
                 var vapidDetails = new VapidDetails(

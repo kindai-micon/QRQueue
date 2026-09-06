@@ -8,7 +8,7 @@ namespace QRQueue.Services;
 public interface IQueueCallService
 {
     /// <summary>
-    /// 「次を呼ぶ」(設計§4.6)。
+    /// 「次を呼ぶ」(設計書)。
     /// ① 現在呼び出し中(Calling)のグループを割り込みpool(Interrupted)へ退避し、
     /// ② 呼び出し先を優先順位どおり決定(Waiting先頭 → 方式②プール自動確定)して Calling へ移す。
     /// 呼び出せるグループがなければ null を返す。
@@ -16,16 +16,16 @@ public interface IQueueCallService
     /// </summary>
     Task<ParticipationGroup?> CallNextAsync(Event ev);
 
-    // ※「再呼び出し(CallAgain)」は管理向け(CallController)側の責務のため、ここでは提供しない(§6.2)
+    // ※「再呼び出し(CallAgain)」は管理向け(CallController)側の責務のため、ここでは提供しない
 
     /// <summary>
-    /// 方式②のグループ成立(設計§4.2)。プールの参加順先頭 memberCount 人で1グループを成立させ、
+    /// 方式②のグループ成立(設計書)。プールの参加順先頭 memberCount 人で1グループを成立させ、
     /// 採番して Waiting へ載せる。満員成立(join側)と自動確定(next側)の共用。
     /// プールが空なら null。
     /// </summary>
     Task<ParticipationGroup?> FormGroupFromMatchingPoolAsync(Event ev, int memberCount);
 
-    /// <summary>呼び出しの通知: SignalR(Called/QueueChanged) + 対象グループ全員へ Web Push(設計§7)</summary>
+    /// <summary>呼び出しの通知: SignalR(Called/QueueChanged) + 対象グループ全員へ Web Push(設計書)</summary>
     Task AnnounceAsync(Event ev, ParticipationGroup group);
 }
 
@@ -83,7 +83,7 @@ public class QueueCallService(
         var survivor = pool[0];
         foreach (var other in pool.Skip(1).Take(memberCount - 1))
         {
-            // チケットの付け替え(DisplayId は変わらないため Push 購読も引き継がれる §4.4)
+            // チケットの付け替え(DisplayId は変わらないため Push 購読も引き継がれる)
             foreach (var ticket in other.Tickets)
             {
                 ticket.ParticipationGroupId = survivor.Id;

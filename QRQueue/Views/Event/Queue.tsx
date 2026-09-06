@@ -7,7 +7,7 @@ type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 管理用キュー一覧(設計§9.1 /event/[eventid]/queue、旧 tickets 画面の置換)。
+// 管理用キュー一覧(設計書 /event/[eventid]/queue、旧 tickets 画面の置換)。
 // 番号・人数・待ち状況の読み取り専用。操作は呼び出しコンソールから。
 export default function Queue({ model }: { model: Model }) {
     const [queue, setQueue] = useState<QueueView | null>(null);

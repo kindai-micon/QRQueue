@@ -6,7 +6,7 @@ type Model = {
     joinToken: string;
 };
 
-// グループ参加確認画面(設計§9.1 /join/[token])。方式③の招待QRの飛び先。
+// グループ参加確認画面(設計書 /join/[token])。方式③の招待QRの飛び先。
 export default function Join({ model }: { model: Model }) {
     const [info, setInfo] = useState<GroupInfoView | null>(null);
     const [notFound, setNotFound] = useState(false);

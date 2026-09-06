@@ -1,7 +1,7 @@
 namespace QRQueue.Models
 {
     /// <summary>
-    /// 旧紙券PDF用のラベル情報(設計§6.3/§8 で印刷物は廃止)。
+    /// 旧紙券PDF用のラベル情報(印刷物は廃止)。
     /// DB 上は Event の必須 FK として残置しており、マイグレーションは行わない。
     /// </summary>
     public class TicketInfo : BaseModel
