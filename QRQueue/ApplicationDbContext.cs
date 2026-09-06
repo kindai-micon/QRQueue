@@ -20,5 +20,19 @@ namespace QRQueue
         public ApplicationDbContext() : base()
         {
         }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // イベント削除時にグループ・チケットまで一括削除されるようにする。
+            // ParticipationGroupId は nullable(FK)のため既定では CASCADE にならず、
+            // 親削除時に FK 違反(23503)でイベント削除が 500 になる
+            modelBuilder.Entity<Ticket>()
+                .HasOne(t => t.ParticipationGroup)
+                .WithMany(g => g.Tickets)
+                .HasForeignKey(t => t.ParticipationGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        }
     }
 }
