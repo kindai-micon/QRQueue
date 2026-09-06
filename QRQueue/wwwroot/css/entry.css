@@ -1,0 +1,100 @@
+/* QRQueue/Views/Entry/Index.tsx 用スタイル */
+
+.entry-container {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 1.5rem 1rem; min-height: 100vh;
+    background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%);
+}
+.entry-card {
+    background: #ffffff; border-radius: 12px; padding: 2rem 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: 100%; max-width: 420px; text-align: center;
+    box-sizing: border-box;
+}
+.entry-kind {
+    display: inline-block; background: #3a7d7c; color: white;
+    padding: 0.3rem 0.9rem; border-radius: 50px; font-size: 0.85rem; margin-bottom: 1rem;
+}
+.entry-event-name {
+    font-size: 1.4rem; color: #333; margin: 0.2rem 0 0.4rem; line-height: 1.4;
+    word-break: break-word;
+}
+.entry-event-id {
+    font-family: 'Courier New', monospace; font-size: 0.8rem; color: #999;
+    margin: 0 0 1.2rem;
+}
+.entry-mode-title { font-size: 1.05rem; font-weight: 600; color: #555; margin: 1.4rem 0 0.9rem; }
+
+/* === 受付停止中 === */
+.entry-closed {
+    padding: 1rem; border-radius: 8px; background: #fff3e0;
+    color: #e65100; font-weight: 600; margin-bottom: 1rem;
+}
+.entry-note { font-size: 0.8rem; color: #888; margin: 1.2rem 0 0; }
+
+/* === 参加方法の選択カード === */
+.entry-modes {
+    display: flex; flex-direction: column; gap: 0.8rem;
+}
+.entry-mode {
+    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    width: 100%; box-sizing: border-box;
+    padding: 1.1rem 1rem; border: 2px solid #e0e0e0; border-radius: 12px;
+    background: #fafafa; cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+.entry-mode:hover:not(:disabled) {
+    border-color: #3a7d7c; background: #f0f7f7;
+}
+.entry-mode:active:not(:disabled) { transform: scale(0.98); }
+.entry-mode:disabled { opacity: 0.5; cursor: not-allowed; }
+.entry-mode-name { font-size: 1.05rem; font-weight: 700; color: #333; }
+.entry-mode-desc { font-size: 0.8rem; color: #888; line-height: 1.4; }
+
+/* === ボタン(共通) === */
+.entry-btn {
+    width: 100%; padding: 0.95rem; border: none; border-radius: 12px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.entry-btn:active:not(:disabled) { transform: scale(0.98); }
+.entry-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.entry-btn-primary {
+    background: linear-gradient(135deg, #3a7d7c 0%, #2d6360 100%);
+    color: white; font-size: 1.05rem;
+}
+.entry-btn-secondary {
+    background: #ffffff; color: #3a7d7c;
+    border: 2px solid #3a7d7c; margin-top: 0.6rem;
+}
+
+/* === エラー === */
+.entry-error {
+    padding: 0.8rem; border-radius: 8px; background: #ffebee;
+    color: #c62828; font-size: 0.9rem; margin-bottom: 1rem;
+}
+
+/* === 既存参加メニュー(409時) === */
+.entry-existing {
+    padding: 1.2rem 1rem; border-radius: 12px; background: #e3f2fd;
+    border: 1px solid #90caf9; margin-bottom: 1rem;
+}
+.entry-existing h3 { font-size: 1rem; color: #0d47a1; margin: 0 0 0.5rem; }
+.entry-existing-desc { font-size: 0.82rem; color: #1565c0; margin: 0 0 1rem; }
+.entry-existing .entry-btn-primary {
+    background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+}
+
+/* === グループ作成完了 === */
+.entry-group-created h2 { font-size: 1.2rem; color: #333; margin: 0 0 1rem; }
+.entry-group-label { color: #666; font-size: 0.9rem; }
+.entry-group-number {
+    font-size: 3rem; font-weight: bold; letter-spacing: 2px; color: #333;
+    font-family: 'Courier New', monospace; margin: 0.3rem 0 0.8rem;
+}
+.entry-group-desc { font-size: 0.9rem; color: #666; margin: 0 0 1rem; }
+.entry-qr {
+    display: inline-block; padding: 0.8rem; background: #ffffff;
+    border: 1px solid #eee; border-radius: 8px; margin-bottom: 1.2rem;
+}
+.entry-qr img { max-width: 100%; height: auto; display: block; }
