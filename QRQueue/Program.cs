@@ -175,6 +175,27 @@ namespace QRQueue
 
             var app = builder.Build();
 
+            // デプロイ(サービス再起動)後の一定時間、HTML 応答に Clear-Site-Data: "cache" を付与し、
+            // ブラウザ保持の古いキャッシュ(以前の 1年キャッシュのビュー JS 等)を強制破棄する。
+            // これによりデプロイ直後のアクセスで必ず新しい assets から読み直せる。
+            // 未対応ブラウザではヘッダーが無視されるだけで害はない
+            var appStartedAtUtc = DateTimeOffset.UtcNow;
+            static bool IsDocumentRequest(HttpContext ctx) =>
+                HttpMethods.IsGet(ctx.Request.Method) &&
+                !ctx.Request.Path.StartsWithSegments("/api") &&
+                !ctx.Request.Path.StartsWithSegments("/_jsx") &&
+                (ctx.Request.Headers.Accept.ToString().Contains("text/html") ||
+                 string.IsNullOrEmpty(ctx.Request.Headers.Accept));
+            app.Use(async (context, next) =>
+            {
+                if (DateTimeOffset.UtcNow - appStartedAtUtc < TimeSpan.FromMinutes(10) &&
+                    IsDocumentRequest(context))
+                {
+                    context.Response.Headers["Clear-Site-Data"] = "\"cache\"";
+                }
+                await next();
+            });
+
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
