@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import MessageModal from "@/Shared/Modal";
 import { readErrorMessage, type SendUser } from "@/Shared/api";
 
 // SvelteKit routes/users/+page.svelte から移行
@@ -15,6 +16,7 @@ export default function Index() {
     const [showModal, setShowModal] = useState(false);
     const [targetUserToDelete, setTargetUserToDelete] = useState<string | null>(null);
     const [modalError, setModalError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         loadUsers();
@@ -56,7 +58,7 @@ export default function Index() {
                 setNewUserName("");
                 setNewPassword("");
                 setNewEmail("");
-                alert("ユーザーが追加されました。");
+                setNotice("ユーザーが追加されました。");
                 loadUsers();
             } else {
                 // 統一エラー形式 ApiMessage { message }(IdentityError[] もサーバー側で結合済み)
@@ -105,6 +107,7 @@ export default function Index() {
     return (
         <Layout title="ユーザー管理 | QRQueue">
             <link rel="stylesheet" href="/css/users.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             {showModal && (
                 <div class="modal-overlay">
                     <div class="modal">

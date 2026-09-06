@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import MessageModal from "@/Shared/Modal";
 import type { EventInfoView } from "@/Shared/api";
 
 type Model = {
@@ -10,6 +11,7 @@ type Model = {
 // 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(§8 / PR#9)。
 export default function Publishing({ model }: { model: Model }) {
     const [ev, setEv] = useState<EventInfoView | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -26,7 +28,7 @@ export default function Publishing({ model }: { model: Model }) {
         try {
             const res = await fetch(path);
             if (!res.ok) {
-                alert("PDFの発行に失敗しました(TicketPublish 権限が必要です)");
+                setNotice("PDFの発行に失敗しました(TicketPublish 権限が必要です)");
                 return;
             }
             const blob = await res.blob();
@@ -40,13 +42,14 @@ export default function Publishing({ model }: { model: Model }) {
             window.URL.revokeObjectURL(url);
         } catch (err) {
             console.error("PDF発行エラー:", err);
-            alert("予期せぬエラーが発生しました");
+            setNotice("予期せぬエラーが発生しました");
         }
     }
 
     return (
         <Layout title={ev?.eventName ? `QR掲示PDF発行: ${ev.eventName} | QRQueue` : "QR掲示PDF発行 | QRQueue"}>
             <link rel="stylesheet" href="/css/event-publishing.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="publishing-container">
                 <div class="page-title">イベント: {ev?.eventName ?? "..."}</div>
 

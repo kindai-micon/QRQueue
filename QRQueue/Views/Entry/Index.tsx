@@ -1,4 +1,5 @@
 ﻿import Layout from "@/Shared/Layout";
+import MessageModal from "@/Shared/Modal";
 import { useState, useEffect } from "preact/hooks";
 import { readErrorMessage, type ApiMessage, type EventInfoView, type JoinConflict, type JoinResult, type RestoreResult } from "@/Shared/api";
 
@@ -14,6 +15,7 @@ const [selectedMode, setSelectedMode] = useState<string>("");                   
 const [joinToken, setJoinToken] = useState<string | null>(null);                //グループ参加用の番号.
 const [groupNumber, setGroupNumber] = useState<number | null>(null);            //作成されたグループ番号.
 const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    //作成された自分のチケット番号.
+const [notice, setNotice] = useState<string | null>(null);                      //alert の代わりのメッセージモーダル.
 
 useEffect(() => {
     async function loadEventInfo() {
@@ -51,7 +53,7 @@ async function handleJoin(mode: string) {
             setSelectedMode(mode);
             setShowExistingMenu(true);
         } else {
-            alert(data.message ??  "参加登録できませんでした" );
+            setNotice(data.message ??  "参加登録できませんでした" );
         }
 
         return;
@@ -59,7 +61,7 @@ async function handleJoin(mode: string) {
 
 
     if (!response.ok) {
-        alert(await readErrorMessage(response));
+        setNotice(await readErrorMessage(response));
         return;
     }
 
@@ -88,7 +90,7 @@ async function handleRestore() {
     });
 
     if (!response.ok) {
-        alert(await readErrorMessage(response));
+        setNotice(await readErrorMessage(response));
         return;
     }
 
@@ -114,7 +116,7 @@ async function handleJoinOverwrite(mode: string) {
     });
 
     if (!response.ok) {
-        alert(await readErrorMessage(response));
+        setNotice(await readErrorMessage(response));
         return;
     }
 
@@ -133,6 +135,7 @@ async function handleJoinOverwrite(mode: string) {
 
     return (
         <Layout chrome="header" title={eventInfo?.eventName ? `参加登録: ${eventInfo.eventName} | QRQueue` : "参加登録 | QRQueue"}>
+        <MessageModal message={notice} onClose={() => setNotice(null)} />
         <div>
             
             <h1>イベント参加</h1>
