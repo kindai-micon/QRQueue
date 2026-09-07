@@ -90,6 +90,7 @@ export type TicketView = {
     aheadCount?: number | null;
     joinToken?: string | null;
     isRepresentative?: boolean;
+    lineLinked?: boolean;
 };
 
 export const TICKET_STATUS_LABEL: Record<GroupStatus | TicketStatus, string> = {

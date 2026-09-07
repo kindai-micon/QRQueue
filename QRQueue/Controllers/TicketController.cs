@@ -118,7 +118,8 @@ namespace QRQueue.Controllers
                 allowCoJoin,
                 // === 電子券画面用 接着項目 ===
                 joinToken,
-                isRepresentative);
+                isRepresentative,
+                ticket.LineUserId != null);
         }
 
         /// <summary>

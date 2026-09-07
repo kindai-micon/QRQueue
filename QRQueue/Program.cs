@@ -63,6 +63,8 @@ namespace QRQueue
             builder.Services.AddScoped<IQueueCallService, QueueCallService>();
             builder.Services.AddSingleton<IVapidService, VapidService>();
             builder.Services.AddSingleton<IPushSubscriptionService, PushSubscriptionService>();
+            builder.Services.AddHttpClient();
+            builder.Services.AddScoped<ILineService, LineService>();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSingleton<IAuthorityScanService, AuthorityScanService>();

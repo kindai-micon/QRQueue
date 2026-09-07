@@ -63,6 +63,7 @@ public class QueueCallService(
     IParticipationGroupRepository groupRepository,
     IGroupNumberIssuanceService groupNumberIssuanceService,
     IPushSubscriptionService pushSubscriptionService,
+    ILineService lineService,
     IHubContext<QueueHub> hubContext,
     IConfiguration configuration,
     ApplicationDbContext db) : IQueueCallService
@@ -351,6 +352,9 @@ public class QueueCallService(
             groupDisplayId = group.DisplayId.ToString()
         });
         await pushSubscriptionService.SendNotifyTicketGroupAsync(group.Tickets, $"{ev.Name}で順番になりました",$"順番になりましたのでブースまで来てください");
+        // LINE連携済みのチケットには Messaging API でも通知する(Web Push と併用)
+        await lineService.SendNotifyAsync(group.Tickets.Select(t => t.DisplayId).ToList(),
+            $"{ev.Name}で順番になりました。ブースまで来てください");
     }
 
     private Task NotifyQueueChangedAsync(Event ev)

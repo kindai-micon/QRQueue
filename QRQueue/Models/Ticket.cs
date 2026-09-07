@@ -22,6 +22,8 @@ namespace QRQueue.Models
         // コード自体は保存せず、DB漏えい時にも悪用できないようにする。
         public string? TransferCodeHash { get; set; }
         public DateTimeOffset? TransferCodeExpiresAt { get; set; }
+        // LINE連携(LINE Login の userId。呼び出し時に Messaging API で push する)
+        public string? LineUserId { get; set; }
     }
     public enum TicketStatus
     {
