@@ -1,8 +1,9 @@
 ﻿import Layout from "@/Shared/Layout";
 import { useState, useEffect } from "preact/hooks";
+import type { HubConnection } from "@microsoft/signalr";
 
-type Model = {    
-    eventId: string;     
+type Model = {
+    eventId: string;
 };
 
 type EventInfo = {
@@ -10,6 +11,13 @@ type EventInfo = {
     status: string;
     isOpen: boolean;
     maxGroupSize: number;
+};
+
+// 受付状態の表示ラベル(issue #65)
+const STATUS_LABELS: Record<string, string> = {
+    Preparing: "受付開始前",
+    Open: "受付中",
+    Closed: "受付終了",
 };
 
 export default function Index({ model }: { model: Model }) {
@@ -22,14 +30,57 @@ const [groupNumber, setGroupNumber] = useState<number | null>(null);            
 const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    //作成された自分のチケット番号.
 
 useEffect(() => {
-    async function loadEventInfo() {
-        const response = await fetch(`/api/entry/${model.eventId}`);
-        const data = await response.json();
+    let disposed = false;
+    let connection: HubConnection | null = null;
+    let poll: number | undefined;
 
-        setEventInfo(data);
+    async function loadEventInfo() {
+        try {
+            const response = await fetch(`/api/entry/${model.eventId}`);
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!disposed) setEventInfo(data);
+        } catch (err) {
+            console.error("イベント情報の取得に失敗:", err);
+        }
     }
 
     loadEventInfo();
+
+    (async () => {
+        try {
+            // 受付開始・終了を参加登録画面に自動反映する(issue #65)
+            const { HubConnectionBuilder, HttpTransportType } = await import("@microsoft/signalr");
+            connection = new HubConnectionBuilder()
+                .withUrl("/api/queueHub", { skipNegotiation: true, transport: HttpTransportType.WebSockets })
+                .withAutomaticReconnect()
+                .build();
+            connection.on("UpdateStatus", loadEventInfo);
+            connection.on("QueueChanged", loadEventInfo);
+            connection.onreconnected(async () => {
+                await connection?.invoke("SetEvent", model.eventId);
+                await loadEventInfo();
+            });
+            await connection.start();
+            if (disposed) {
+                await connection.stop();
+                return;
+            }
+            await connection.invoke("SetEvent", model.eventId);
+        } catch (err) {
+            console.error("SignalR connection setup error:", err);
+        }
+        // 通知を取りこぼした場合のバックストップ(15秒ごとに再取得)
+        if (!disposed) {
+            poll = window.setInterval(loadEventInfo, 15000);
+        }
+    })();
+
+    return () => {
+        disposed = true;
+        if (poll) window.clearInterval(poll);
+        connection?.stop().catch(() => { /* ignore */ });
+    };
 }, [model.eventId]);
 
 
@@ -146,7 +197,15 @@ async function handleJoinOverwrite(mode: string) {
             <h1>イベント参加</h1>
 
             {eventInfo && (
-                <h2>{eventInfo.eventName}</h2>
+                <>
+                    <h2>{eventInfo.eventName}</h2>
+                    <p>
+                        受付状態:{" "}
+                        <strong style={{ color: eventInfo.isOpen ? "green" : "#c62828" }}>
+                            {STATUS_LABELS[eventInfo.status] ?? eventInfo.status}
+                        </strong>
+                    </p>
+                </>
             )}
 
             <p>イベントID：{model.eventId}</p>
