@@ -698,6 +698,66 @@ namespace QRQueue.Controllers
             return Convert.ToHexString(bytes);
         }
 
+        /// <summary>
+        /// グループ全体の受付取消(issue #67)。
+        /// 呼び出し前(Waiting/Matching)のグループを、代表者だけが明示的に取り消せる。
+        /// 取り消されたグループとチケットは Cancelled となり待機キュー・呼び出し対象から除外され、
+        /// 再利用できない。再参加する場合は新しいチケットで受付からやり直す。
+        /// 呼び出し後の取り消しはスタッフ操作に限定するため 409 で拒否する。
+        /// </summary>
+        [HttpPost("group/cancel")]
+        public async Task<IActionResult> GroupCancel([FromBody] EventRequest request)
+        {
+            var ev = await eventRepository.FindByDisplayIdAsync(request.EventDisplayId);
+            if (ev == null)
+            {
+                return NotFound(new ApiMessage("イベントが見つかりません"));
+            }
+
+            var participantToken = await ParticipantTokenAsync();
+            if (participantToken == null)
+            {
+                return NotFound(new ApiMessage("参加者cookieがありません"));
+            }
+
+            var ticket = await ticketRepository.FindActiveByParticipantTokenAsync(
+                participantToken.Value, ev.DisplayId);
+            if (ticket == null || ticket.ParticipationGroupId == null)
+            {
+                return NotFound(new ApiMessage("このイベントでの参加登録が見つかりません"));
+            }
+
+            var group = await groupRepository.FindByIdAsync(ticket.ParticipationGroupId.Value);
+            if (group == null || group.Status == GroupStatus.Cancelled)
+            {
+                return NotFound(new ApiMessage("この参加は既に取り消されています"));
+            }
+
+            // 代表者以外は取り消せない(issue #67)
+            if (!IsRepresentative(ticket, group))
+            {
+                return StatusCode(403, new ApiMessage("グループの受付取消は代表者のみが行えます"));
+            }
+
+            // 呼び出し後(Calling 以降)は参加者画面から取り消せない(issue #67)
+            if (group.Status is GroupStatus.Calling or GroupStatus.Interrupted or GroupStatus.Completed)
+            {
+                return Conflict(new ApiMessage("呼び出し済みのため、参加者画面からは取り消せません。スタッフにお尋ねください。"));
+            }
+
+            // グループと有効チケットをすべて無効化し、再利用できないようにする
+            group.Status = GroupStatus.Cancelled;
+            group.JoinToken = null;
+            foreach (var t in group.Tickets.Where(t => t.Status != TicketStatus.Cancelled))
+            {
+                t.Status = TicketStatus.Cancelled;
+            }
+            await groupRepository.SaveChangesAsync();
+            await NotifyJoinedAsync(ev);
+
+            return Ok(new { groupNumber = group.Number });
+        }
+
         /// <summary>グループ参加QRのPNG(代表者の電子券画面に表示、設計§8)</summary>
         [HttpGet("group/{joinToken}/qrcode")]
         public async Task<IActionResult> GetGroupQrCode(string joinToken)
