@@ -10,15 +10,18 @@ public class TicketPdfController : ControllerBase
     private readonly IEventRepository _eventRepository;
     private readonly IBaseUrlResolver _baseUrlResolver;
     private readonly ITicketPdfGenerator _pdfGenerator;
+    private readonly ICheckinCodeService _checkinCodeService;
 
     public TicketPdfController(
         IEventRepository eventRepository,
         IBaseUrlResolver baseUrlResolver,
-        ITicketPdfGenerator pdfGenerator)
+        ITicketPdfGenerator pdfGenerator,
+        ICheckinCodeService checkinCodeService)
     {
         _eventRepository = eventRepository;
         _baseUrlResolver = baseUrlResolver;
         _pdfGenerator = pdfGenerator;
+        _checkinCodeService = checkinCodeService;
     }
 
     /// <summary>
@@ -39,8 +42,10 @@ public class TicketPdfController : ControllerBase
     }
 
     /// <summary>
-    /// チェックインQRの掲示用PDF(A4・1QR)。受付に掲示し、
-    /// 呼び出し中グループの代表者が読み取ることで受付が確定する。読み取り先は {base}/checkin/{eventDisplayId}。
+    /// チェックインQRの掲示用PDF(A4・1QR、設計§8/§4.6)。受付に掲示し、
+    /// 呼び出し中グループの代表者が読み取ることで受付が確定する。
+    /// 読み取り先は {base}/checkin/{eventDisplayId}?rc={到着確認コード}(issue #68)。
+    /// 確認コード付きの受付掲示QRからのみチェックインが完了する。
     /// </summary>
     [Authorize(Policy = "TicketPublish")]
     [HttpGet("checkin/{eventDisplayId}")]
@@ -50,7 +55,8 @@ public class TicketPdfController : ControllerBase
         if (ev == null)
             return NotFound("イベントが見つかりません");
 
-        var url = $"{_baseUrlResolver.Resolve(Request)}/checkin/{eventDisplayId}";
+        var checkinCode = await _checkinCodeService.GetCheckinCodeAsync(eventDisplayId);
+        var url = $"{_baseUrlResolver.Resolve(Request)}/checkin/{eventDisplayId}?rc={checkinCode}";
         var bytes = _pdfGenerator.GenerateQrPosterPdf(ev.Name, "チェックインQR", url, "そろったグループは代表者が受付で読み取ってください");
         return File(bytes, "application/pdf", $"チェックインQR_{ev.Name}.pdf");
     }
