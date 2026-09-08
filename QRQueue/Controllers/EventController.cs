@@ -30,6 +30,8 @@ namespace QRQueue.Controllers
         [HttpPost(nameof(Create))]
         public async Task<IActionResult> Create([FromBody] string name)
         {
+            // 仕様: イベント名の重複は禁止(削除・変更は DisplayId で行うため、
+            // 名前は人間向けの表示ラベルとして一意であることを前提とする)
             if (applicationDbContext.Events.Any(x => x.Name == name))
             {
                 return BadRequest(new ApiMessage("Event already exists"));
@@ -47,32 +49,53 @@ namespace QRQueue.Controllers
             }
             return Ok();
         }
+
+        /// <summary>
+        /// イベント削除(issue #84)。イベント名ではなく一意なイベントID(DisplayId)で対象を特定する。
+        /// 同名イベントが存在しても、意図した1件だけを削除できる。
+        /// </summary>
         [Authorize(Policy = "EventManagement")]
-        [HttpPost(nameof(Delete))]
-        public async Task<IActionResult> Delete([FromBody] string name)
+        [HttpDelete("{eventDisplayId}")]
+        public async Task<IActionResult> Delete(Guid eventDisplayId)
         {
-            var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.Name == name);
+            var ev = await applicationDbContext.Events
+                .FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
             if (ev == null)
             {
                 return NotFound();
             }
+            // 削除前に管理者が対象を確認できるよう、関連情報を応答に含める
+            var groupCount = await applicationDbContext.ParticipationGroups
+                .CountAsync(g => g.EventId == ev.Id);
             applicationDbContext.Events.Remove(ev);
             await applicationDbContext.SaveChangesAsync();
-            return Ok();
+            return Ok(new { id = ev.DisplayId.ToString(), name = ev.Name, deletedGroups = groupCount });
         }
+
+        /// <summary>
+        /// イベント名称変更(issue #84)。対象の特定はイベントID(DisplayId)で行い、
+        /// 変更後の名前が既存イベントと重複する場合は拒否する。
+        /// </summary>
         [Authorize(Policy = "EventManagement")]
-        [HttpPut(nameof(Rename))]
-        public async Task<IActionResult> Rename([FromBody] RenameModel renameModel)
+        [HttpPut("{eventDisplayId}/name")]
+        public async Task<IActionResult> Rename(Guid eventDisplayId, [FromBody] string newName)
         {
-            var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.Name == renameModel.Name);
+            if (string.IsNullOrWhiteSpace(newName))
+            {
+                return BadRequest(new ApiMessage("イベント名が空です"));
+            }
+            var ev = await applicationDbContext.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
             if (ev == null)
             {
                 return NotFound();
             }
-            ev.Name = renameModel.NewName;
-            applicationDbContext.Events.Update(ev);
+            if (applicationDbContext.Events.Any(x => x.Name == newName && x.DisplayId != eventDisplayId))
+            {
+                return Conflict(new ApiMessage("同じ名前のイベントが既に存在します"));
+            }
+            ev.Name = newName;
             await applicationDbContext.SaveChangesAsync();
-            return Ok();
+            return Ok(new { id = ev.DisplayId.ToString(), name = ev.Name });
         }
         [HttpGet(nameof(Name))]
         public async Task<ActionResult<string>> Name([FromQuery] string id)
