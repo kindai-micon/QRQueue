@@ -1,10 +1,20 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using QRQueue.Hubs;
 using QRQueue.Models;
 using QRQueue.Repositories;
 
 namespace QRQueue.Services;
 
+/// <summary>
+/// 呼び出しの状態遷移ルール(設計§4.6、issue #82で明文化):
+/// - Waiting → Calling: 「次を呼ぶ」(スタッフ操作/チェックイン完了後のAutoNext)でのみ遷移する。
+/// - Calling → Completed: 代表者のチェックインでのみ遷移する。
+/// - Calling → Interrupted: 次の呼び出し時に未チェックインのまま退避される。
+/// - Interrupted → Completed: 代表者がそろった時点でチェックインし、次の呼び出しに割り込んで処理される。
+/// - これらの遷移はすべて「イベント単位の排他制御」(PostgreSQL アドバイザリロック+トランザクション)
+///   の下で原子的に確定されるため、同時実行でも状態が一意に定まる。
+/// </summary>
 public interface IQueueCallService
 {
     /// <summary>
@@ -33,6 +43,20 @@ public interface IQueueCallService
     /// ゲーム参加枠の未到着グループを優先待機(Interrupted)へ退避する(issue #69)。
     /// </summary>
     Task EvacuateExpiredSlotGroupsAsync(Event ev);
+
+    /// 代表者のチェックイン完了を原子的に確定する(issue #82)。
+    /// グループ状態の更新(→Completed)と、それに続く再告知/次の呼び出しを
+    /// イベント単位の排他制御下で一括処理する。
+    /// グループが呼び出されていない等で確定できない場合は null を返す。
+    /// 既に Completed の場合はそのまま返す(冪等)。
+    /// </summary>
+    Task<ParticipationGroup?> CompleteCheckinAsync(Event ev, Guid groupId);
+
+    /// <summary>
+    /// 同一イベントに対する更新処理を直列化して実行する(issue #82)。
+    /// 再呼び出し(CallAgain)など、状態を更新する管理操作から利用する。
+    /// </summary>
+    Task<T> RunExclusiveAsync<T>(Event ev, Func<Task<T>> operation);
 }
 
 public class QueueCallService(
@@ -40,9 +64,53 @@ public class QueueCallService(
     IGroupNumberIssuanceService groupNumberIssuanceService,
     IPushSubscriptionService pushSubscriptionService,
     IHubContext<QueueHub> hubContext,
-    IConfiguration configuration) : IQueueCallService
+    IConfiguration configuration,
+    ApplicationDbContext db) : IQueueCallService
 {
-    public async Task<ParticipationGroup?> CallNextAsync(Event ev)
+    // ===== イベント単位の排他制御(issue #82) =====
+
+    /// <summary>アドバイザリロック用のキーに変換する</summary>
+    private static long ToLockKey(Guid eventId)
+    {
+        return BitConverter.ToInt64(eventId.ToByteArray(), 0);
+    }
+
+    /// <summary>
+    /// イベント単位の排他制御: PostgreSQL アドバイザリロック(pg_advisory_xact_lock)を取得してから
+    /// 処理を実行し、一連の読み取り・更新・保存を一つのトランザクションで確定する。
+    /// 同じイベントに対する呼び出し・チェックイン・再呼び出しが同時に実行されても、
+    /// 状態の読み取り→更新が直列化されるため、不整合が発生しない。
+    /// </summary>
+    private async Task<T> InEventLockAsync<T>(Event ev, Func<Task<T>> operation)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        try
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock({ToLockKey(ev.DisplayId)})");
+            var result = await operation();
+            await transaction.CommitAsync();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public Task<T> RunExclusiveAsync<T>(Event ev, Func<Task<T>> operation)
+    {
+        return InEventLockAsync(ev, operation);
+    }
+
+    public Task<ParticipationGroup?> CallNextAsync(Event ev)
+    {
+        return InEventLockAsync(ev, () => CallNextCoreAsync(ev));
+    }
+
+    /// <summary>CallNextAsync の本体(イベントロック内で実行される)</summary>
+    private async Task<ParticipationGroup?> CallNextCoreAsync(Event ev)
     {
         // ① 現在呼び出し中で未チェックインのグループを割り込みpoolへ退避
         //    (チェックイン済みグループは参加者のチェックイン時点で Completed になっているため、
@@ -199,6 +267,51 @@ public class QueueCallService(
         return group.Tickets.Count(t => t.Status != TicketStatus.Cancelled);
     }
 
+    public Task<ParticipationGroup?> CompleteCheckinAsync(Event ev, Guid groupId)
+    {
+        return InEventLockAsync(ev, async () =>
+        {
+            var group = await groupRepository.FindByIdAsync(groupId);
+            if (group == null)
+            {
+                return null;
+            }
+
+            // ロック取得後に DB の最新値を再読み込みする(issue #82)。
+            // コントローラが同一スコープの DbContext で当該グループをロード済みのため、
+            // 単純な再クエリでは identity resolution により追跡済み(コミット前)の
+            // インスタンスが返る。明示的に Reload してから状態を確定的に判定する。
+            await db.Entry(group).ReloadAsync();
+            if (group.Status is GroupStatus.Matching or GroupStatus.Waiting or GroupStatus.Cancelled)
+            {
+                // 呼び出されていない/無効なグループ(呼び出し側で案内を返す)
+                return null;
+            }
+            if (group.Status == GroupStatus.Completed)
+            {
+                // 冪等: 多重チェックインでも状態は変化しない
+                return group;
+            }
+
+            var wasInterrupted = group.Status == GroupStatus.Interrupted;
+            group.Status = GroupStatus.Completed;
+            await groupRepository.SaveChangesAsync();
+
+            if (wasInterrupted)
+            {
+                // 割り込みpoolのグループ: そろった時点で完了扱いとし、次の呼び出しに割り込んで
+                // 処理対象にする(§4.6 優先順位1。チェックイン時点での即時告知として実装)
+                await AnnounceAsync(ev, group);
+                return group;
+            }
+
+            // 正常キューから呼び出されていたグループのチェックイン完了をトリガーに AutoNext。
+            // 同一ロック内で実行されるため、退避→呼び出しの過程で他の操作が介入しない。
+            await CallNextCoreAsync(ev);
+            return group;
+        });
+    }
+
     public async Task<ParticipationGroup?> FormGroupFromMatchingPoolAsync(Event ev, int memberCount)
     {
         var pool = await groupRepository.GetMatchingPoolAsync(ev.Id);
@@ -222,7 +335,8 @@ public class QueueCallService(
         survivor.Type = GroupType.AutoMatched;
         survivor.Status = GroupStatus.Waiting;
 
-        // 採番(Serializable トランザクション内で付け替えも一緒に保存される)
+        // 採番(排他トランザクション内で呼ばれた場合はそのトランザクションに参加、
+        // それ以外は IssueNumberAsync が自身の Serializable トランザクションを開始する)
         await groupNumberIssuanceService.IssueNumberAsync(survivor);
         await NotifyQueueChangedAsync(ev);
         return survivor;

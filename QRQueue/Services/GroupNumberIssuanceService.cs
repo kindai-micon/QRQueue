@@ -20,8 +20,20 @@ public interface IGroupNumberIssuanceService
 
 public class GroupNumberIssuanceService(ApplicationDbContext db) : IGroupNumberIssuanceService
 {
+    /// <summary>
+    /// グループに呼び出し番号を採番する。
+    /// 呼び出し元のトランザクションが既にある場合(イベント排他制御内、issue #82)はそれに参加し、
+    /// なければ Serializable 分離レベルのトランザクションを開始して採番競合を防ぐ。
+    /// </summary>
     public async Task IssueNumberAsync(ParticipationGroup group)
     {
+        if (db.Database.CurrentTransaction != null)
+        {
+            // イベント排他トランザクション(アドバイザリロック保持)に参加して採番する
+            await IssueCoreAsync(group);
+            return;
+        }
+
         await using var transaction = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable);
 
@@ -43,5 +55,19 @@ public class GroupNumberIssuanceService(ApplicationDbContext db) : IGroupNumberI
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>採番の本体(MAX+1 方式、開始番号は旧踏襲で 1000 番)</summary>
+    private async Task IssueCoreAsync(ParticipationGroup group)
+    {
+        // 採番済み(MAX(Number))の次に繰り上げ。まだ 1 件も採番されていなければ 1000 番開始(旧踏襲)
+        var maxNumber = await db.ParticipationGroups
+            .Where(g => g.EventId == group.EventId && g.Number > 0)
+            .MaxAsync(g => (long?)g.Number);
+
+        group.Number = (maxNumber ?? 999) + 1;
+
+        // 採番とグループ・チケットの保存を一つのトランザクションで確定(§4.5)
+        await db.SaveChangesAsync();
     }
 }

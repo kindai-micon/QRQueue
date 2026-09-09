@@ -281,11 +281,11 @@ namespace QRQueue.Controllers
                     return new CheckinResult(group.Number, group.Status);
             }
 
-            var wasInterrupted = group.Status == GroupStatus.Interrupted;
-            group.Status = GroupStatus.Completed;
-            await groupRepository.SaveChangesAsync();
-
-            if (wasInterrupted)
+            // 状態遷移(Calling/Interrupted → Completed + 再告知/次の呼び出し)は
+            // イベント単位の排他制御下で原子的に確定する(issue #82)。
+            // 確定できなかった場合(再読み込みの間に Waiting へ戻された等)は 409。
+            var completed = await queueCallService.CompleteCheckinAsync(ev, group.Id);
+            if (completed == null)
             {
                 // 割り込みpoolのグループ: そろった時点で完了扱いとし、次の呼び出しに割り込んで
                 // 処理対象にする(優先順位1。チェックイン時点での即時告知として実装)
