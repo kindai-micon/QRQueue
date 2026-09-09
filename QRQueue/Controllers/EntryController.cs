@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using QRQueue.Hubs;
 using QRQueue.Models;
@@ -29,8 +30,12 @@ namespace QRQueue.Controllers
         IQueueCallService queueCallService,
         IQrCodeGenerator qrCodeGenerator,
         IHubContext<QueueHub> hubContext,
-        IConfiguration configuration) : ControllerBase
+        IConfiguration configuration,
+        ApplicationDbContext applicationDbContext) : ControllerBase
     {
+        /// <summary>1グループの最大参加人数(設計§4)</summary>
+        private const int MaxGroupSize = 3;
+
         public record JoinRequest(Guid EventDisplayId, string Mode, bool Overwrite);
         public record EventRequest(Guid EventDisplayId);
         public record GroupJoinRequest(string JoinToken);
@@ -294,79 +299,116 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
-        /// グループ参加。参加者cookie で既にどこかに参加中なら上書き(旧グループ離脱、)。
+        /// グループ参加。参加者cookie で既にどこかに参加中なら上書き(旧グループ離脱)。
         /// 満員・joinToken無効・呼び出し済みは 409。
+        /// issue #81: 人数上限(MaxGroupSize)の判定と参加登録を Serializable トランザクション内で
+        /// 原子的に行う。同時リクエスト間で人数上限を超えることを防ぎ、
+        /// 超過リクエストには分かりやすいエラーを返す。
         /// </summary>
         [HttpPost("group/join")]
         public async Task<ActionResult<JoinResult>> GroupJoin([FromBody] GroupJoinRequest request)
         {
-            var group = await groupRepository.FindByJoinTokenAsync(request.JoinToken);
-            if (group == null)
+            var preGroup = await groupRepository.FindByJoinTokenAsync(request.JoinToken);
+            if (preGroup == null)
             {
                 // joinToken 無効(代表者離脱による無効化を含む)
                 return NotFound(new ApiMessage("グループが見つかりません"));
             }
-            if (group.Status != GroupStatus.Waiting)
-            {
-                return Conflict(new ApiMessage("このグループには参加できません(呼び出し済み・終了済みです)"));
-            }
-            if (ActiveMemberCount(group) >= 3)
-            {
-                return Conflict(new ApiMessage("このグループは既に満員です"));
-            }
 
-            var ev = await eventRepository.FindByIdAsync(group.EventId);
+            var ev = await eventRepository.FindByIdAsync(preGroup.EventId);
             if (ev == null)
             {
                 return NotFound(new ApiMessage("イベントが見つかりません"));
-            }
-            if (ev.Status != EventStatus.Open)
-            {
-                return Conflict(new ApiMessage("受付終了しました"));
             }
 
             var cookieToken = await ParticipantTokenAsync();
             var isNewParticipant = cookieToken == null;
             var participantToken = cookieToken ?? Guid.CreateVersion7();
 
-            var existing = await ticketRepository.FindActiveByParticipantTokenAsync(
-                participantToken, ev.DisplayId);
-            if (existing != null && existing.ParticipationGroupId == group.Id)
+            // ここから原子的処理(issue #81)。Serializable トランザクション内でグループを
+            // AsNoTracking で再取得(EF の identity resolution を避け DB の最新値を判定に使う)し、
+            // 状態・人数判定を行う。複数の同時参加リクエストは直列化され、
+            // 1グループの有効参加者は必ず上限(MaxGroupSize)以下になる。
+            await using var transaction = await applicationDbContext.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable);
+            try
             {
-                // 既にこのグループのメンバー → 冪等に現在の券を返す
-                return new JoinResult(existing.DisplayId.ToString(), group.Number, null);
-            }
-
-            Ticket ticket;
-            if (existing != null)
-            {
-                // 上書き: 旧グループから離脱してチケットを付け替え
-                var leaveError = await LeaveCurrentGroupAsync(existing);
-                if (leaveError != null)
+                var group = await applicationDbContext.ParticipationGroups
+                    .AsNoTracking()
+                    .Include(g => g.Tickets)
+                    .FirstOrDefaultAsync(g => g.Id == preGroup.Id);
+                if (group == null)
                 {
-                    return Conflict(new ApiMessage(leaveError));
+                    return Conflict(new ApiMessage("このグループには参加できません(終了済みです)"));
                 }
-                existing.ParticipationGroupId = group.Id;
-                ticket = existing;
-            }
-            else
-            {
-                ticket = new Ticket
+                if (group.Status != GroupStatus.Waiting)
                 {
-                    ParticipationGroupId = group.Id,
-                    ParticipantToken = participantToken
-                };
-                await ticketRepository.AddAsync(ticket);
-            }
-            await ticketRepository.SaveChangesAsync();
-            await NotifyJoinedAsync(ev);
+                    return Conflict(new ApiMessage("このグループには参加できません(呼び出し済み・終了済みです)"));
+                }
+                if (ev.Status != EventStatus.Open)
+                {
+                    return Conflict(new ApiMessage("受付終了しました"));
+                }
+                if (ActiveMemberCount(group) >= MaxGroupSize)
+                {
+                    return Conflict(new ApiMessage("このグループは既に満員です。新しいグループを作成して参加してください。"));
+                }
 
-            // 初回参加の成功時のみ cookie を発行(「発行は1回きり」)
-            if (isNewParticipant)
-            {
-                await IssueParticipantCookieAsync(participantToken);
+                var existing = await ticketRepository.FindActiveByParticipantTokenAsync(
+                    participantToken, ev.DisplayId);
+                if (existing != null && existing.ParticipationGroupId == group.Id)
+                {
+                    // 既にこのグループのメンバー → 冪等に現在の券を返す
+                    await transaction.CommitAsync();
+                    return new JoinResult(existing.DisplayId.ToString(), group.Number, null);
+                }
+
+                Ticket ticket;
+                if (existing != null)
+                {
+                    // 上書き: 旧グループから離脱してチケットを付け替え
+                    var leaveError = await LeaveCurrentGroupAsync(existing);
+                    if (leaveError != null)
+                    {
+                        await transaction.RollbackAsync();
+                        return Conflict(new ApiMessage(leaveError));
+                    }
+                    existing.ParticipationGroupId = group.Id;
+                    ticket = existing;
+                }
+                else
+                {
+                    ticket = new Ticket
+                    {
+                        ParticipationGroupId = group.Id,
+                        ParticipantToken = participantToken
+                    };
+                    await ticketRepository.AddAsync(ticket);
+                }
+                await ticketRepository.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                // 初回参加の成功時のみ cookie を発行(「発行は1回きり」)
+                if (isNewParticipant)
+                {
+                    await IssueParticipantCookieAsync(participantToken);
+                }
+                await NotifyJoinedAsync(ev);
+
+                return new JoinResult(ticket.DisplayId.ToString(), group.Number, null);
             }
-            return new JoinResult(ticket.DisplayId.ToString(), group.Number, null);
+            catch (Npgsql.NpgsqlException ex) when (ex.SqlState == "40001")
+            {
+                // Serializable 競合時はコミット時に serialization failure(SQLSTATE 40001)となるため、
+                // 500 ではなく超過側に分かりやすい 409 を返す(issue #81 の期待動作)
+                await transaction.RollbackAsync();
+                return Conflict(new ApiMessage("他の参加と競合してグループが満員になりました。お手数ですが新しいグループを作成して参加してください。"));
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         /// <summary>グループ参加QRのPNG(代表者の電子券画面に表示)</summary>
