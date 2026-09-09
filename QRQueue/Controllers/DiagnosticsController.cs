@@ -58,40 +58,55 @@ namespace QRQueue.Controllers
                 return NotFound();
             }
 
-            var keys = await vapidService.GetOrCreateKeysAsync();
-            var keysPath = configuration["Vapid:KeysFilePath"] ?? "vapid_keys.json";
-
-            return Ok(new
+            try
             {
-                environment = environment.EnvironmentName,
-                checkin = new
+                var keys = await vapidService.GetOrCreateKeysAsync();
+                var keysPath = configuration["Vapid:KeysFilePath"] ?? "vapid_keys.json";
+
+                return Ok(new
                 {
-                    // 受付QRの到着確認コードを導出する秘密鍵(未設定ならVAPID鍵へフォールバック)
-                    receptionSecret = configuration["Checkin:ReceptionSecret"],
-                },
-                vapid = new
+                    environment = environment.EnvironmentName,
+                    checkin = new
+                    {
+                        // 受付QRの到着確認コードを導出する秘密鍵(未設定ならVAPID鍵へフォールバック)
+                        receptionSecret = configuration["Checkin:ReceptionSecret"],
+                    },
+                    vapid = new
+                    {
+                        subject = configuration["Vapid:Subject"],
+                        keysFilePath = keysPath,
+                        keysFileExists = System.IO.File.Exists(keysPath),
+                        publicKey = keys.PublicKey,
+                    },
+                    line = new
+                    {
+                        configured = lineService.IsConfigured,
+                        channelAccessToken = configuration["Line:ChannelAccessToken"],
+                        loginClientId = configuration["Line:LoginClientId"],
+                        loginClientSecret = configuration["Line:LoginClientSecret"],
+                        redirectUri = configuration["Line:RedirectUri"],
+                    },
+                    cors = new
+                    {
+                        allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").GetChildren()
+                            .Select(c => c.Value).ToArray(),
+                        envAllowedOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS"),
+                    },
+                    useHttpsForQrCode = configuration.GetValue<bool?>("UseHttpsForQrCode"),
+                });
+            }
+            catch (Exception ex)
+            {
+                // 一時診断用のため例外の詳細をそのまま返して原因を可視化する
+                // (このエンドポイント自体が削除前提のため許容)
+                return StatusCode(500, new
                 {
-                    subject = configuration["Vapid:Subject"],
-                    keysFilePath = keysPath,
-                    keysFileExists = System.IO.File.Exists(keysPath),
-                    publicKey = keys.PublicKey,
-                },
-                line = new
-                {
-                    configured = lineService.IsConfigured,
-                    channelAccessToken = configuration["Line:ChannelAccessToken"],
-                    loginClientId = configuration["Line:LoginClientId"],
-                    loginClientSecret = configuration["Line:LoginClientSecret"],
-                    redirectUri = configuration["Line:RedirectUri"],
-                },
-                cors = new
-                {
-                    allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").GetChildren()
-                        .Select(c => c.Value).ToArray(),
-                    envAllowedOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS"),
-                },
-                useHttpsForQrCode = configuration.GetValue<bool?>("UseHttpsForQrCode"),
-            });
+                    error = ex.GetType().Name,
+                    message = ex.Message,
+                    stackTrace = ex.StackTrace,
+                    inner = ex.InnerException?.Message,
+                });
+            }
         }
     }
 }
