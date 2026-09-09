@@ -136,13 +136,9 @@ namespace QRQueue.Controllers
             }
             return Ok();
         }
-        [HttpGet(nameof(GetPasscode))]
-        public ActionResult<PasscodeView> GetPasscode()
-        {
-            var passcode = passcodeService.GetPasscode();
-            Console.WriteLine("passcode:" + passcode);
-            return new PasscodeView(passcode);
-        }
+        // issue #77: 初期登録用パスコードを返すAPIは廃止した。
+        // パスコードはサーバーコンソールへ出力されるか、
+        // デプロイ時に InitialAdmin:Passcode 設定として提供される(IPasscodeService を参照)。
 
         [HttpPost(nameof(InitialRegister))]
         public async Task<IActionResult> InitialRegister(InitialUser initialUser)
