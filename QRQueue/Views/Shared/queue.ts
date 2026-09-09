@@ -4,6 +4,7 @@ export type GroupView = {
     number: number;
     people: number;
     status: number; // GroupStatus enum(数値で返る)
+    displayId?: string; // スタッフ操作の対象指定に使う(issue #73)
 };
 
 // GET /api/call/queue/{eventDisplayId} のレスポンス(QueueView)

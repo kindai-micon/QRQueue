@@ -120,6 +120,71 @@ namespace QRQueue.Controllers
             return Ok();
         }
 
+        /// <summary>
+        /// グループを優先待機(Interrupted)へ移動する(issue #73)。
+        /// 未到着グループを枠から除外して到着済みグループだけでゲームを進めたい場合や、
+        /// 到着済みだが次の枠へ回したい場合にスタッフが使用する。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("group/{groupDisplayId}/interrupt")]
+        public async Task<IActionResult> InterruptGroup(Guid groupDisplayId)
+        {
+            var group = await _db.ParticipationGroups
+                .Include(x => x.Event)
+                .Include(x => x.Tickets)
+                .FirstOrDefaultAsync(x => x.DisplayId == groupDisplayId);
+            if (group == null)
+            {
+                return NotFound();
+            }
+            if (group.Status is not (GroupStatus.Calling or GroupStatus.Completed))
+            {
+                return Conflict("呼び出し中またはチェックイン済みのグループのみ優先待機へ移動できます");
+            }
+
+            group.Status = GroupStatus.Interrupted;
+            await _db.SaveChangesAsync();
+
+            await _hubContext.Clients.Group(group.Event.DisplayId.ToString()).SendAsync("QueueChanged");
+            return Ok(new { groupNumber = group.Number, status = group.Status.ToString() });
+        }
+
+        /// <summary>
+        /// グループの棄権処理(チケット無効化)(issue #73)。
+        /// 未到着グループを棄権扱いにし、グループと有効チケットをすべて無効化する。
+        /// 無効化されたチケットは再利用できない。スタッフのみ実行できる(CallExecute)。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("group/{groupDisplayId}/forfeit")]
+        public async Task<IActionResult> ForfeitGroup(Guid groupDisplayId)
+        {
+            var group = await _db.ParticipationGroups
+                .Include(x => x.Event)
+                .Include(x => x.Tickets)
+                .FirstOrDefaultAsync(x => x.DisplayId == groupDisplayId);
+            if (group == null)
+            {
+                return NotFound();
+            }
+            if (group.Status is GroupStatus.Cancelled)
+            {
+                return Conflict("既に取り消されています");
+            }
+
+            group.Status = GroupStatus.Cancelled;
+            group.JoinToken = null;
+            var cancelled = 0;
+            foreach (var ticket in group.Tickets.Where(t => t.Status == TicketStatus.Registered))
+            {
+                ticket.Status = TicketStatus.Cancelled;
+                cancelled++;
+            }
+            await _db.SaveChangesAsync();
+
+            await _hubContext.Clients.Group(group.Event.DisplayId.ToString()).SendAsync("QueueChanged");
+            return Ok(new { groupNumber = group.Number, cancelledTickets = cancelled });
+        }
+
         [Authorize(Policy = "CallView")]
         [HttpGet("queue/{eventDisplayId}")]
         public async Task<ActionResult<QueueView>> Queue(Guid eventDisplayId)
@@ -147,21 +212,24 @@ namespace QRQueue.Controllers
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status
+                Status = x.Status,
+                DisplayId = x.DisplayId
             });
 
             view.CallingGroup = callingGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status
+                Status = x.Status,
+                DisplayId = x.DisplayId
             });
 
             view.InterruptedGroup = interruptedGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status
+                Status = x.Status,
+                DisplayId = x.DisplayId
             });
 
             view.PeoplePool = matchingGroups.Sum(x => x.Tickets.Count(t => t.Status != TicketStatus.Cancelled));
@@ -193,7 +261,8 @@ namespace QRQueue.Controllers
                         {
                             Number = x.Number,
                             People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                            Status = x.Status
+                            Status = x.Status,
+                            DisplayId = x.DisplayId
                         })
                     })
                     .OrderByDescending(x => x.CalledAt)
