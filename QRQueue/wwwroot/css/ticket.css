@@ -70,7 +70,23 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
 }
 .transfer-note { font-size: 0.8rem; color: #777; }
 
-/* === 電子券画面 改造分 === */
+/* === 受付確定フロー(issue #66) === */
+.draft-panel {
+    width: 100%; max-width: 450px; box-sizing: border-box;
+    background-color: #fffde7; border: 2px solid #fdd835; border-radius: 12px;
+    padding: 1rem 1.2rem; margin-bottom: 1rem; text-align: left;
+}
+.draft-members { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.draft-cojoin { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.draft-note { font-size: 0.78rem; color: #777; margin-top: 0.4rem; }
+.confirm-btn {
+    width: 100%; padding: 0.9rem; margin-top: 0.5rem;
+    border: none; border-radius: 12px; background: linear-gradient(135deg, #43a047, #2e7d32);
+    color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;
+}
+.confirm-btn:active { transform: scale(0.98); }
+
+/* === 電子券画面 改造分(§9.1) === */
 .ticket-number-sub { font-size: 0.85rem; margin-top: 0.6rem; opacity: 0.9; font-weight: 400; }
 
 .queue-info {

@@ -160,13 +160,16 @@ namespace QRQueue.Controllers
                 }
                 case "group-create":
                 {
+                    // issue #66: 代表者登録時点では「受付確定前(Draft)」とし、
+                    // 代表者が「受付」を確定するまで採番・呼び出し対象にしない(§4.3 改め)
                     var joinToken = Guid.CreateVersion7().ToString("N");
                     var group = new ParticipationGroup
                     {
                         EventId = ev.Id,
                         Type = GroupType.Manual,
-                        Status = GroupStatus.Waiting,
-                        JoinToken = joinToken
+                        Status = GroupStatus.Draft,
+                        JoinToken = joinToken,
+                        AllowCoJoin = true // 同時参加可否の初期値はオン(issue #66)
                     };
                     await groupRepository.AddAsync(group);
                     ticket.ParticipationGroupId = group.Id;
@@ -174,8 +177,8 @@ namespace QRQueue.Controllers
                     {
                         await ticketRepository.AddAsync(ticket);
                     }
-                    // 代表者登録時点で採番(メンバーが揃うのを待たない)
-                    await groupNumberIssuanceService.IssueNumberAsync(group);
+                    // 受付確定前(Draft)のため採番は行わない。代表者の「受付」確定(GroupConfirm)時に採番する
+                    await ticketRepository.SaveChangesAsync();
                     await NotifyJoinedAsync(ev);
                     result = new JoinResult(ticket.DisplayId.ToString(), group.Number, joinToken);
                     break;
@@ -304,16 +307,20 @@ namespace QRQueue.Controllers
             }
 
             var memberCount = ActiveMemberCount(group);
+            // 受付確定前(Draft)・呼び出し待ち(Waiting)のいずれも参加可能(issue #66)
+            var isDraft = group.Status == GroupStatus.Draft;
             return new GroupInfoView(
                 group.Number,
                 memberCount,
-                memberCount >= 3,
-                group.Status == GroupStatus.Waiting && memberCount < 3);
+                memberCount >= MaxGroupSize,
+                (isDraft || group.Status == GroupStatus.Waiting) && memberCount < MaxGroupSize);
         }
 
         /// <summary>
         /// グループ参加。参加者cookie で既にどこかに参加中なら上書き(旧グループ離脱)。
         /// 満員・joinToken無効・呼び出し済みは 409。
+        /// issue #66: 受付確定前(Draft)のグループにも参加できる。
+        /// 3人に達した場合、同時参加可否を自動でオフにする。
         /// issue #81: 人数上限(MaxGroupSize)の判定と参加登録を Serializable トランザクション内で
         /// 原子的に行う。同時リクエスト間で人数上限を超えることを防ぎ、
         /// 超過リクエストには分かりやすいエラーを返す。
@@ -324,8 +331,16 @@ namespace QRQueue.Controllers
             var preGroup = await groupRepository.FindByJoinTokenAsync(request.JoinToken);
             if (preGroup == null)
             {
-                // joinToken 無効(代表者離脱による無効化を含む)
+                // joinToken 無効(代表者離脱・受付確定による無効化を含む)
                 return NotFound(new ApiMessage("グループが見つかりません"));
+            }
+            if (preGroup.Status is not (GroupStatus.Draft or GroupStatus.Waiting))
+            {
+                return Conflict(new ApiMessage("このグループには参加できません(呼び出し済み・終了済みです)"));
+            }
+            if (ActiveMemberCount(preGroup) >= MaxGroupSize)
+            {
+                return Conflict(new ApiMessage("このグループは既に満員です。新しいグループを作成して参加してください。"));
             }
 
             var ev = await eventRepository.FindByIdAsync(preGroup.EventId);
@@ -354,7 +369,8 @@ namespace QRQueue.Controllers
                 {
                     return Conflict(new ApiMessage("このグループには参加できません(終了済みです)"));
                 }
-                if (group.Status != GroupStatus.Waiting)
+                // issue #66: 受付確定前(Draft)・呼び出し待ち(Waiting)のいずれも参加可能
+                if (group.Status is not (GroupStatus.Draft or GroupStatus.Waiting))
                 {
                     return Conflict(new ApiMessage("このグループには参加できません(呼び出し済み・終了済みです)"));
                 }
@@ -399,6 +415,17 @@ namespace QRQueue.Controllers
                     await ticketRepository.AddAsync(ticket);
                 }
                 await ticketRepository.SaveChangesAsync();
+                // issue #66: 3人に達した場合は同時参加可否を自動でオフにする。
+                // group は AsNoTracking のため条件付き UPDATE で反映する。
+                var memberCountAfterAdd = await applicationDbContext.Tickets
+                    .CountAsync(t => t.ParticipationGroupId == group.Id
+                                  && t.Status != TicketStatus.Cancelled);
+                if (memberCountAfterAdd >= MaxGroupSize)
+                {
+                    await applicationDbContext.ParticipationGroups
+                        .Where(g => g.Id == group.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(g => g.AllowCoJoin, false));
+                }
                 await transaction.CommitAsync();
 
                 // 初回参加の成功時のみ cookie を発行(「発行は1回きり」)
@@ -424,6 +451,110 @@ namespace QRQueue.Controllers
             }
         }
 
+        public record CoJoinRequest(Guid EventDisplayId, bool AllowCoJoin);
+
+        /// <summary>
+        /// 受付確定(「受付」ボタン、issue #66)。代表者が押した時点で受付を確定し、
+        /// 呼び出し番号を採番して待機キューへ追加する。
+        /// 確定後は人数・同時参加可否を変更できない(JoinToken を無効化)。
+        /// 状態遷移(Waiting 化・JoinToken 無効化)を採番前に済ませ、
+        /// IssueNumberAsync と同一トランザクションで原子的に確定する(レビュー指摘)。
+        /// 採番後の中断で「番号付きDraft」が残り、再確定で飛び番が発生することを防ぐ。
+        /// </summary>
+        [HttpPost("group/confirm")]
+        public async Task<IActionResult> GroupConfirm([FromBody] EventRequest request)
+        {
+            var (ev, ticket, group, error) = await FindActiveParticipantAsync(request.EventDisplayId);
+            if (error != null)
+            {
+                return error;
+            }
+
+            if (!IsRepresentative(ticket!, group!))
+            {
+                return StatusCode(403, new ApiMessage("受付の確定は代表者のみが行えます"));
+            }
+            if (group!.Status != GroupStatus.Draft)
+            {
+                return Conflict(new ApiMessage("既に受付が確定しているか、取り消されています"));
+            }
+
+            // 先に状態遷移を行い(待機キューへ載せ、メンバー追加を受け付けない状態にし)、
+            // 採番と併せて IssueNumberAsync の Serializable トランザクション内で原子的に確定する
+            group.Status = GroupStatus.Waiting;
+            group.JoinToken = null;
+            await groupNumberIssuanceService.IssueNumberAsync(group);
+            await groupRepository.SaveChangesAsync();
+            await NotifyJoinedAsync(ev!);
+
+            return Ok(new { groupNumber = group.Number });
+        }
+
+        /// <summary>
+        /// 同時参加可否の変更(issue #66)。受付確定前(Draft)の代表者のみ変更できる。
+        /// 3人に達したグループは自動でオフになっており変更できない。
+        /// </summary>
+        [HttpPost("group/cojoin")]
+        public async Task<IActionResult> SetCoJoin([FromBody] CoJoinRequest request)
+        {
+            var (ev, ticket, group, error) = await FindActiveParticipantAsync(request.EventDisplayId);
+            if (error != null)
+            {
+                return error;
+            }
+
+            if (!IsRepresentative(ticket!, group!))
+            {
+                return StatusCode(403, new ApiMessage("同時参加可否の変更は代表者のみが行えます"));
+            }
+            if (group!.Status != GroupStatus.Draft)
+            {
+                return Conflict(new ApiMessage("受付確定後は変更できません"));
+            }
+            if (request.AllowCoJoin && ActiveMemberCount(group) >= MaxGroupSize)
+            {
+                return Conflict(new ApiMessage("3人に達しているため、同時参加可否をオンにできません"));
+            }
+
+            group.AllowCoJoin = request.AllowCoJoin;
+            await groupRepository.SaveChangesAsync();
+            return Ok(new { allowCoJoin = group.AllowCoJoin });
+        }
+
+        /// <summary>
+        /// 参加者cookieから、イベント内の有効な参加(チケット)とそのグループを取得する。
+        /// 見つからない場合は error に応答を設定して返す。
+        /// </summary>
+        private async Task<(Event? ev, Ticket? ticket, ParticipationGroup? group, IActionResult? error)>
+            FindActiveParticipantAsync(Guid eventDisplayId)
+        {
+            var ev = await eventRepository.FindByDisplayIdAsync(eventDisplayId);
+            if (ev == null)
+            {
+                return (null, null, null, NotFound(new ApiMessage("イベントが見つかりません")));
+            }
+
+            var participantToken = await ParticipantTokenAsync();
+            if (participantToken == null)
+            {
+                return (null, null, null, NotFound(new ApiMessage("参加者cookieがありません")));
+            }
+
+            var ticket = await ticketRepository.FindActiveByParticipantTokenAsync(
+                participantToken.Value, ev.DisplayId);
+            if (ticket == null || ticket.ParticipationGroupId == null)
+            {
+                return (null, null, null, NotFound(new ApiMessage("このイベントでの参加登録が見つかりません")));
+            }
+
+            var group = await groupRepository.FindByIdAsync(ticket.ParticipationGroupId.Value);
+            if (group == null)
+            {
+                return (null, null, null, NotFound(new ApiMessage("このイベントでの参加登録が見つかりません")));
+            }
+
+            return (ev, ticket, group, null);
+        }
         // ===== チケット引き継ぎ(別端末への復元、issue #75) =====
         // cookie喪失(端末変更・ブラウザ変更・cookie削除等)により電子券へアクセスできなくなった
         // 参加者のための復元手段。元端末で発行した引き継ぎコードを新しい端末で入力すると、

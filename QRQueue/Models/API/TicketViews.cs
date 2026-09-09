@@ -11,6 +11,8 @@ namespace QRQueue.Models.API
         long? GroupNumber,
         long? CurrentCallingNumber,
         int? AheadCount,
+        int? MemberCount,
+        bool? AllowCoJoin,
         string? JoinToken,
         bool IsRepresentative);
 }
