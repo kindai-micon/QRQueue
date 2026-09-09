@@ -39,6 +39,7 @@ namespace QRQueue.Repositories.Implementations
         public Task<List<ParticipationGroup>> GetInterruptedAsync(Guid eventId)
         {
             return applicationDbContext.ParticipationGroups
+                .Include(x => x.Tickets)
                 .Where(x => x.EventId == eventId && x.Status == GroupStatus.Interrupted)
                 .OrderBy(x => x.Updated)
                 .ToListAsync();
@@ -58,6 +59,7 @@ namespace QRQueue.Repositories.Implementations
         public Task<List<ParticipationGroup>> GetCallingAsync(Guid eventId)
         {
             return applicationDbContext.ParticipationGroups
+                .Include(x => x.Tickets)
                 .Where(x => x.EventId == eventId && x.Status == GroupStatus.Calling)
                 .OrderBy(x => x.CalledAt)
                 .ToListAsync();
