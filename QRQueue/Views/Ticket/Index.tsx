@@ -14,6 +14,7 @@ export default function Index({ model }: { model: Model }) {
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
+    const [lineLinked, setLineLinked] = useState(false);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
     const [transferCode, setTransferCode] = useState<string | null>(null);
     const [transferring, setTransferring] = useState(false);
@@ -92,6 +93,11 @@ export default function Index({ model }: { model: Model }) {
     }, []);
 
     useEffect(() => {
+        // LINE連携のコールバックで戻ってきた場合の完了表示(URLからはパラメータを消しておく)
+        if (new URLSearchParams(window.location.search).get("line") === "linked") {
+            setNotice("LINE連携が完了しました。順番が来るとLINEにも通知が届きます");
+            window.history.replaceState(null, "", window.location.pathname);
+        }
         try {
             const stored = localStorage.getItem("notifications");
             const list: string[] = stored ? JSON.parse(stored) : [];
@@ -305,6 +311,21 @@ export default function Index({ model }: { model: Model }) {
         }
     }
 
+    // LINE連携の解除
+    async function unlinkLine() {
+        try {
+            const res = await fetch(`/api/line/unlink/${model.ticketId}`, { method: "POST" });
+            if (!res.ok) {
+                console.error("LINE連携の解除に失敗:", res.status, await readErrorMessage(res));
+                return;
+            }
+            setLineLinked(false);
+            setNotice("LINE連携を解除しました");
+        } catch (error) {
+            console.error("LINE連携の解除に失敗:", error);
+        }
+    }
+
     useEffect(() => {
         let connection: HubConnection | null = null;
         let disposed = false;
@@ -323,6 +344,7 @@ export default function Index({ model }: { model: Model }) {
                 const data: TicketView = await res.json();
                 if (disposed) return;
                 setTicketData(data);
+                setLineLinked(data.lineLinked ?? false);
 
                 // チケットのイベントが確定したら SignalR グループへ参加
                 if (data.eventId && data.eventId !== joinedEventId && connection?.state === "Connected") {
@@ -404,6 +426,19 @@ export default function Index({ model }: { model: Model }) {
                             </button>
                         </div>
                         {notice && <div class="notification-notice">{notice}</div>}
+
+                        <div class="line-actions">
+                            {lineLinked ? (
+                                <>
+                                    <div class="line-linked-label">LINE通知 連携済み</div>
+                                    <button class="line-unlink-btn" onClick={unlinkLine}>解除</button>
+                                </>
+                            ) : (
+                                <a class="line-btn" href={`/api/line/authorize/${model.ticketId}`}>
+                                    LINEで通知を受け取る
+                                </a>
+                            )}
+                        </div>
                         <div class="header">
                             <h1>{ticketData.eventName ?? "電子券"}</h1>
                             <p>あなたの参加証(この画面が唯一の参加証です)</p>

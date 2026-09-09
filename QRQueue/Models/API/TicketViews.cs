@@ -17,5 +17,6 @@ namespace QRQueue.Models.API
         int? MemberCount,
         bool? AllowCoJoin,
         string? JoinToken,
-        bool IsRepresentative);
+        bool IsRepresentative,
+        bool LineLinked);
 }
