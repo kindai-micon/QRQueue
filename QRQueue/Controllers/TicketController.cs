@@ -104,6 +104,9 @@ namespace QRQueue.Controllers
             return new TicketView(
                 group?.Number ?? ticket.Number,
                 group?.Status.ToString() ?? ticket.Status.ToString(),
+                // チケット自体の状態(使用済みなど、グループ状態とは独立に表示する)(issue #71)
+                ticket.Status.ToString(),
+                ticket.Status == TicketStatus.Used,
                 ev?.DisplayId,
                 // === 電子券画面用 拡張項目 ===
                 ev?.Name,

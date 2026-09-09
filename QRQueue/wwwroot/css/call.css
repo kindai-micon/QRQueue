@@ -21,7 +21,12 @@
     border: 2px solid #3a7d7c; border-radius: 12px; cursor: pointer;
     background: white; color: #3a7d7c;
 }
-.call-next:disabled, .call-again:disabled { opacity: 0.5; cursor: default; }
+.call-done {
+    flex: 1; padding: 1.4rem; font-size: 1.2rem; font-weight: 700;
+    border: 2px solid #78909c; border-radius: 12px; cursor: pointer;
+    background: white; color: #455a64;
+}
+.call-next:disabled, .call-again:disabled, .call-done:disabled { opacity: 0.5; cursor: default; }
 .call-hint { font-size: 0.8rem; color: #888; margin-bottom: 1rem; }
 .call-message {
     padding: 0.8rem 1rem; border-radius: 8px; background: #e8f5e9;

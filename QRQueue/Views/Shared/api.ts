@@ -80,6 +80,9 @@ export type GroupInfoView = {
 export type TicketView = {
     number: number;
     status: GroupStatus | TicketStatus;
+    // チケット自体の状態(使用済みなど、グループ状態とは独立に表示する)(issue #71)
+    ticketStatus?: string;
+    used?: boolean;
     eventId: string | null;
     eventName?: string | null;
     groupNumber?: number | null;

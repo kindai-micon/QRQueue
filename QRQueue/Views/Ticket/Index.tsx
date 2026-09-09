@@ -464,11 +464,22 @@ export default function Index({ model }: { model: Model }) {
                             </div>
                         )}
 
-                        {ticketData.status === "Completed" && (
+                        {ticketData.status === "Completed" && !ticketData.used && (
                             <div class="alert-box alert-completed">
                                 <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>✓</div>
                                 <div>受付完了</div>
                                 <div class="alert-sub">受付が完了しました</div>
+                            </div>
+                        )}
+
+                        {ticketData.used && (
+                            <div class="alert-box alert-used">
+                                <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>🏁</div>
+                                <div>使用済み</div>
+                                <div class="alert-sub">
+                                    このチケットのゲーム参加は終了しました。
+                                    同じイベントに再度参加する場合は、参加登録から新しいチケットを発行してください。
+                                </div>
                             </div>
                         )}
 

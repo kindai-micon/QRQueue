@@ -194,6 +194,21 @@ export default function Call({ model }: { model: Model }) {
                     >
                         🔁 再呼び出し
                     </button>
+                    <button
+                        class="call-done"
+                        disabled={busy}
+                        onClick={() => {
+                            if (confirm("直近にチェックインしたグループのチケットを使用済みにしますか?\nゲーム終了後に押してください。")) {
+                                action("done", () => fetch(`/api/call/done/${model.eventId}`, {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify(null),
+                                }), "ゲーム終了を記録しました(チケットを使用済みにしました)");
+                            }
+                        }}
+                    >
+                        🏁 ゲーム終了
+                    </button>
                 </div>
                 <p class="call-hint">
                     「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します。

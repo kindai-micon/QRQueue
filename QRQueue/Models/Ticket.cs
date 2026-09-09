@@ -27,5 +27,6 @@ namespace QRQueue.Models
     {
         Registered, // 参加登録済み
         Cancelled,  // 上書き・離脱により無効
+        Used,       // ゲーム参加が終了した使用済み(issue #71)。同一イベントでの再参加は新規チケットで行う
     }
 }
