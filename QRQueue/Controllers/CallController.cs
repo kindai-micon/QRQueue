@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using QRQueue.Hubs;
 using QRQueue.Models;
 using QRQueue.Models.API;
 using QRQueue.Services;
@@ -16,15 +18,18 @@ namespace QRQueue.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IQueueCallService _queueCallService;
         private readonly IPushSubscriptionService _pushSubscriptionService;  //再呼び出し(Again)用.
+        private readonly IHubContext<QueueHub> _hubContext;  // 受付状態の即時配信(issue #65)用.
 
         public CallController(
                  ApplicationDbContext db,
                  IQueueCallService queueCallService,
-                 IPushSubscriptionService pushSubscriptionService)
+                 IPushSubscriptionService pushSubscriptionService,
+                 IHubContext<QueueHub> hubContext)
         {
             _db = db;
             _queueCallService = queueCallService;
             _pushSubscriptionService = pushSubscriptionService;
+            _hubContext = hubContext;
         }
 
         [Authorize(Policy = "EventOpenClose")]
@@ -38,6 +43,8 @@ namespace QRQueue.Controllers
             }
             ev.Status = EventStatus.Open;
             await _db.SaveChangesAsync();
+            // 受付状態の変更を参加者画面へ即時配信(issue #65)
+            await NotifyStatusChangedAsync(ev.DisplayId);
             return Ok();
         }
 
@@ -52,7 +59,15 @@ namespace QRQueue.Controllers
             }
             ev.Status = EventStatus.Closed;
             await _db.SaveChangesAsync();
+            // 受付状態の変更を参加者画面へ即時配信(issue #65)
+            await NotifyStatusChangedAsync(ev.DisplayId);
             return Ok();
+        }
+
+        /// <summary>参加登録画面などに受付状態の変化を通知する(issue #65)</summary>
+        private Task NotifyStatusChangedAsync(Guid eventDisplayId)
+        {
+            return _hubContext.Clients.Group(eventDisplayId.ToString()).SendAsync("UpdateStatus");
         }
 
         [Authorize(Policy = "CallExecute")]
