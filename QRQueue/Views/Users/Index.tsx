@@ -1,10 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-
-type SendUser = {
-    userName: string;
-    roles: { name: string }[];
-};
+import MessageModal from "@/Shared/Modal";
+import { readErrorMessage, type SendUser } from "@/Shared/api";
 
 // SvelteKit routes/users/+page.svelte から移行
 export default function Index() {
@@ -19,6 +16,7 @@ export default function Index() {
     const [showModal, setShowModal] = useState(false);
     const [targetUserToDelete, setTargetUserToDelete] = useState<string | null>(null);
     const [modalError, setModalError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         loadUsers();
@@ -29,7 +27,7 @@ export default function Index() {
         try {
             const res = await fetch("/api/user/UserList");
             if (!res.ok) throw new Error(`Error ${res.status}`);
-            setUsers(await res.json());
+            setUsers(await res.json() as SendUser[]);
         } catch (e) {
             setError((e as Error).message);
         }
@@ -60,16 +58,11 @@ export default function Index() {
                 setNewUserName("");
                 setNewPassword("");
                 setNewEmail("");
-                alert("ユーザーが追加されました。");
+                setNotice("ユーザーが追加されました。");
                 loadUsers();
             } else {
-                const data = await response.json();
-                if (Array.isArray(data)) {
-                    // IdentityError[] の形式で返ってきた場合
-                    setErrorMessages(data.map((e: { description: string }) => e.description));
-                } else {
-                    setErrorMessages([data?.message || "ユーザー登録に失敗しました。"]);
-                }
+                // 統一エラー形式 ApiMessage { message }(IdentityError[] もサーバー側で結合済み)
+                setErrorMessages([await readErrorMessage(response)]);
             }
         } catch (err) {
             console.log(err);
@@ -112,8 +105,9 @@ export default function Index() {
     }
 
     return (
-        <Layout>
+        <Layout title="ユーザー管理 | QRQueue">
             <link rel="stylesheet" href="/css/users.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             {showModal && (
                 <div class="modal-overlay">
                     <div class="modal">

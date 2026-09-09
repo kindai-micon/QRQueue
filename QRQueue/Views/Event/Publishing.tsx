@@ -1,27 +1,23 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import MessageModal from "@/Shared/Modal";
+import type { EventInfoView } from "@/Shared/api";
 
 type Model = {
     eventId: string; // eventDisplayId
 };
 
-type EventInfo = {
-    eventName: string;
-    status: string;
-    isOpen: boolean;
-    maxGroupSize: number;
-};
-
-// 掲示物発行画面(設計§9.1 /event/[eventid]/publishing 改造)。
-// 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(§8 / PR#9)。
+// 掲示物発行画面(設計書 /event/[eventid]/publishing 改造)。
+// 旧: 紙券PDFのバルク発行 → 新: 参加登録QR / チェックインQR の A4 掲示用PDF発行(/ PR#9)。
 export default function Publishing({ model }: { model: Model }) {
-    const [ev, setEv] = useState<EventInfo | null>(null);
+    const [ev, setEv] = useState<EventInfoView | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
             try {
                 const res = await fetch(`/api/entry/${model.eventId}`);
-                if (res.ok) setEv(await res.json());
+                if (res.ok) setEv(await res.json() as EventInfoView);
             } catch (err) {
                 console.error("イベント情報の取得に失敗:", err);
             }
@@ -32,7 +28,7 @@ export default function Publishing({ model }: { model: Model }) {
         try {
             const res = await fetch(path);
             if (!res.ok) {
-                alert("PDFの発行に失敗しました(TicketPublish 権限が必要です)");
+                setNotice("PDFの発行に失敗しました(TicketPublish 権限が必要です)");
                 return;
             }
             const blob = await res.blob();
@@ -46,18 +42,19 @@ export default function Publishing({ model }: { model: Model }) {
             window.URL.revokeObjectURL(url);
         } catch (err) {
             console.error("PDF発行エラー:", err);
-            alert("予期せぬエラーが発生しました");
+            setNotice("予期せぬエラーが発生しました");
         }
     }
 
     return (
-        <Layout>
+        <Layout title={ev?.eventName ? `QR掲示PDF発行: ${ev.eventName} | QRQueue` : "QR掲示PDF発行 | QRQueue"}>
             <link rel="stylesheet" href="/css/event-publishing.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="publishing-container">
                 <div class="page-title">イベント: {ev?.eventName ?? "..."}</div>
 
                 <p class="publishing-note">
-                    印刷して会場に掲示してください。QRは<strong>掲示物であり参加証ではありません</strong>(§8)。
+                    印刷して会場に掲示してください。QRは<strong>掲示物であり参加証ではありません</strong>。
                 </p>
 
                 <div class="publishing-cards">
@@ -79,7 +76,7 @@ export default function Publishing({ model }: { model: Model }) {
                         <h2>チェックインQR</h2>
                         <p class="publishing-desc">
                             受付に掲示。呼び出されたグループの<strong>代表者</strong>が読むと受付が確定し、
-                            次の呼び出しが自動で進みます(§4.6)。
+                            次の呼び出しが自動で進みます。
                         </p>
                         <button
                             class="btn-primary"

@@ -25,10 +25,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <TypeScriptCompile Include="Views\Entry\Index.tsx" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Update="fonts\NotoSansJP.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

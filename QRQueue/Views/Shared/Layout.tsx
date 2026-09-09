@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
+import type { SendUser } from "@/Shared/api";
 
 // SvelteKit routes/+layout.svelte から移行
 // (未ログインなら /login へリダイレクトする管理画面共通レイアウト)
@@ -7,12 +8,18 @@ const MENU_ITEMS = [
     { name: "ユーザー管理", href: "/users" },
     { name: "ロール管理", href: "/roles" },
     { name: "イベント管理", href: "/event" },
+    { name: "パスワード変更", href: "/account/password" },
 ];
 
-export default function Layout({ children, chrome = "full" }: { children?: ComponentChildren; chrome?: "full" | "header" }) {
+export default function Layout({ children, chrome = "full", title }: { children?: ComponentChildren; chrome?: "full" | "header"; title?: string }) {
     const [userName, setUserName] = useState<string | null>(null);
     const [checked, setChecked] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
+
+    // タブにURLではなくページ名を表示する(SSR の <title> に加えてクライアントでも確定させる)
+    useEffect(() => {
+        if (title) document.title = title;
+    }, [title]);
 
     useEffect(() => {
         // ヘッダーのみのページ(ログイン・初期登録・チケット確認)では
@@ -23,7 +30,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
             try {
                 const res = await fetch("/api/user/MyInfo");
                 if (res.ok) {
-                    const data = await res.json();
+                    const data: SendUser = await res.json();
                     setUserName(data?.userName ?? null);
                 }
             } catch (error) {
@@ -40,8 +47,19 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
         }
     }, [checked, userName]);
 
+    async function handleLogout() {
+        try {
+            await fetch("/api/user/Logout", { method: "POST" });
+        } catch (error) {
+            console.error("ログアウトに失敗:", error);
+        } finally {
+            window.location.href = "/login";
+        }
+    }
+
     return (
         <div>
+            {title && <title>{title}</title>}
             <link rel="stylesheet" href="/css/layout.css" />
             <link rel="stylesheet" href="/css/site.css" />
             <div class="app-container">
@@ -52,6 +70,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
                         )}
                         <div class="layout-title">QRQueue 管理システム</div>
                     </div>
+                    <div class="header-right">Powered by 近畿大学プログラミング研究部</div>
                 </header>
                 {drawerOpen && (
                     <div class="drawer">
@@ -62,6 +81,7 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
                                     {item.name}
                                 </a>
                             ))}
+                            <button class="logout-link" onClick={handleLogout}>ログアウト</button>
                         </nav>
                     </div>
                 )}
@@ -72,11 +92,13 @@ export default function Layout({ children, chrome = "full" }: { children?: Compo
                                 {MENU_ITEMS.map((item) => (
                                     <a key={item.href} href={item.href}>{item.name}</a>
                                 ))}
+                                <button class="logout-link" onClick={handleLogout}>ログアウト</button>
                             </nav>
                         </aside>
                     )}
                     <main class="main">{children}</main>
                 </div>
+                <footer class="layout-footer">Powered by 近畿大学プログラミング研究部</footer>
             </div>
         </div>
     );

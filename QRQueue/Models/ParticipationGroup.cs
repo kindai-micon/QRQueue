@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace QRQueue.Models
 {
     /// <summary>
-    /// 呼び出しの最小単位となる参加グループ(設計§5.2)
+    /// 呼び出しの最小単位となる参加グループ(設計書)
     /// </summary>
     public class ParticipationGroup : BaseModel
     {
@@ -39,7 +39,7 @@ namespace QRQueue.Models
         Matching,    // 方式②: プール内でメンバー待ち(キュー外・番号未採番)
         Waiting,     // 呼び出し待ち(正常キュー内)
         Calling,     // 呼び出し中(チェックイン待ち)
-        Interrupted, // 割り込みpool: 「次を呼ぶ」で未チェックインのまま退避された(§4.6)
+        Interrupted, // 割り込みpool: 「次を呼ぶ」で未チェックインのまま退避された
         Completed,   // チェックイン済み(受け渡し完了)
         Cancelled,   // 上書き・キャンセルにより無効
     }

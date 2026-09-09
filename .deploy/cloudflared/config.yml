@@ -1,0 +1,18 @@
+# QRQueue 用 Cloudflare Tunnel 設定
+# 配置: /etc/cloudflared/config.yml
+# 認証情報: `cloudflared tunnel create qrqueue` で生成される
+#           /etc/cloudflared/<TUNNEL-ID>.json を同じディレクトリに置く
+#
+# 公開ホスト名とトンネルの紐付けは Cloudflare ダッシュボード、または
+# `cloudflared tunnel route dns qrqueue <hostname>` で行う(リポジトリ外の作業)。
+#
+# トンネルはサーバーから外向きに接続するため、インバウンドのポート開放は不要。
+
+tunnel: <TUNNEL-ID>
+credentials-file: /etc/cloudflared/<TUNNEL-ID>.json
+
+ingress:
+  # すべての公開ホスト名を nginx へフォワード(アプリは単一ドメイン運用)
+  - service: http://localhost:80
+  # 必須: 上で一致しなかったリクエストのフォールバック
+  - service: http_status:404

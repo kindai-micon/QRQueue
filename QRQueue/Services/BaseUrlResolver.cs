@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 namespace QRQueue.Services;
 
 /// <summary>
-/// QRコードに埋め込む BaseURL の解決を共通化する(設計 §8)。
+/// QRコードに埋め込む BaseURL の解決を共通化する(設計書)。
 /// 解決順: 設定 `LotteryBaseUrl` → リクエスト Host。
 /// host が localhost/127.0.0.1 のときは LAN のローカルIPへ変換し、
 /// 非標準ポートのみポート番号を付与する(既存 `TicketPdfController` の規則と同一)。

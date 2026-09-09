@@ -8,7 +8,7 @@ namespace QRQueue.Services;
 
 public interface IQrCodeGenerator
 {
-    /// <summary>QRコードを生成してPNGバイト列で返す(設計§8)</summary>
+    /// <summary>QRコードを生成してPNGバイト列で返す(設計書)</summary>
     byte[] GeneratePng(string text, int width = 150, int height = 150);
 }
 
