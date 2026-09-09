@@ -60,7 +60,6 @@ export default function Index({ model }: { model: Model }) {
                     .withAutomaticReconnect()
                     .build();
                 connection.on("UpdateStatus", loadEventInfo);
-                connection.on("QueueChanged", loadEventInfo);
                 connection.onreconnected(async () => {
                     await connection?.invoke("SetEvent", model.eventId);
                     await loadEventInfo();
