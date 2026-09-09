@@ -8,12 +8,14 @@ namespace QRQueue.Services
     /// 初期管理者登録用パスコード(issue #77)。
     /// パスコードは未認証のAPIから取得できない。入手手段は次の2つのみ:
     /// 1. デプロイ時の設定: 構成 "InitialAdmin:Passcode" に設定した値(運用担当者が事前に決定)
-    /// 2. 未設定の場合、起動時に1回だけサーバーコンソールへ出力する(サーバーにログインできる担当者のみ参照可能)
+    /// 2. 未設定の場合、本サービスが最初にDI解決された時点(初回の /api/user/* リクエスト時等)で
+    ///    1回だけ生成し、サーバーコンソールへ出力する(サーバーにログインできる担当者のみ参照可能)
     /// </summary>
     public class PasscodeService : IPasscodeService
     {
         private readonly UserManager<ApplicationUser> userManager;
         private static string? Passcode;
+        private static readonly object PasscodeLock = new();
 
         private readonly IConfiguration configuration;
 
@@ -22,17 +24,25 @@ namespace QRQueue.Services
             this.userManager = userManager;
             this.configuration = configuration;
 
+            // 同時リクエストでの二重生成を避けるため、初期化は排他制御下で1回だけ行う
             if (Passcode != null)
             {
                 return;
             }
-
-            // デプロイ時設定を優先し、未設定なら起動時に生成してサーバーコンソールへ一度だけ出力する
-            Passcode = configuration["InitialAdmin:Passcode"];
-            if (string.IsNullOrEmpty(Passcode))
+            lock (PasscodeLock)
             {
-                Passcode = GenerateNewPasscode();
-                Console.WriteLine("初期管理者登録用パスコード(サーバーコンソールでのみ確認できます): " + Passcode);
+                if (Passcode != null)
+                {
+                    return;
+                }
+
+                // デプロイ時設定を優先し、未設定なら初回解決時に生成してサーバーコンソールへ一度だけ出力する
+                Passcode = configuration["InitialAdmin:Passcode"];
+                if (string.IsNullOrEmpty(Passcode))
+                {
+                    Passcode = GenerateNewPasscode();
+                    Console.WriteLine("初期管理者登録用パスコード(サーバーコンソールでのみ確認できます): " + Passcode);
+                }
             }
         }
 

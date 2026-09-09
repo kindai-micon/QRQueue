@@ -21,7 +21,7 @@ export default function Index() {
                         window.location.href = "/login";
                     }
                     // issue #77: パスコード取得APIは廃止。
-                    // パスコードはサーバーコンソール(起動時出力)またはデプロイ時設定から入手する。
+                    // パスコードはサーバーコンソール(初回リクエスト時出力)またはデプロイ時設定から入手する。
                 }
             } catch (err) {
                 console.error(err);
@@ -71,7 +71,7 @@ export default function Index() {
             <div class="form-container">
                 <h1>初期ユーザー作成</h1>
                 <p class="passcode-hint">
-                    作成用パスコードは、サーバー起動時にコンソールへ出力された値、または
+                    作成用パスコードは、サーバーコンソールに出力された値(未設定の場合、初回アクセス時に生成・出力されます)、または
                     デプロイ時に設定した <code>InitialAdmin:Passcode</code> の値を入力してください。
                 </p>
                 <form onSubmit={handleSubmit}>
