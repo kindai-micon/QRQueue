@@ -41,6 +41,8 @@ namespace QRQueue.Controllers
         public record EventRequest(Guid EventDisplayId);
         public record GroupJoinRequest(string JoinToken);
         public record CheckinRequest(Guid EventDisplayId, string? ReceptionCode);
+        public record TransferStartRequest(Guid EventDisplayId);
+        public record TransferCompleteRequest(string Code);
 
         /// <summary>参加登録画面の初期化(イベント名・受付状態・グループ上限)</summary>
         [HttpGet("{eventDisplayId}")]
@@ -422,7 +424,148 @@ namespace QRQueue.Controllers
             }
         }
 
-        /// <summary>グループ参加QRのPNG(代表者の電子券画面に表示)</summary>
+        // ===== チケット引き継ぎ(別端末への復元、issue #75) =====
+        // cookie喪失(端末変更・ブラウザ変更・cookie削除等)により電子券へアクセスできなくなった
+        // 参加者のための復元手段。元端末で発行した引き継ぎコードを新しい端末で入力すると、
+        // チケットの participantToken が付け替えられ、旧端末では当該チケットへアクセスできなくなる
+        // (同一チケットの複数端末での重複利用を防止)。引き継ぎ先端末の既存 cookie は尊重し、
+        // 別イベントのチケット保有を壊さない。
+
+        /// <summary>引き継ぎコードの有効期間</summary>
+        private static readonly TimeSpan TransferCodeLifetime = TimeSpan.FromMinutes(10);
+
+        /// <summary>引き継ぎコードに使用する文字(紛らわしい文字を除外)</summary>
+        private const string TransferCodeChars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+        /// <summary>
+        /// 引き継ぎコードの発行(現在の端末=チケット所有者から実行)。
+        /// コードは10分間有効なワンタイムで、サーバーにはSHA256ハッシュのみ保存する。
+        /// </summary>
+        [HttpPost("transfer/start")]
+        public async Task<IActionResult> TransferStart([FromBody] TransferStartRequest request)
+        {
+            var ev = await eventRepository.FindByDisplayIdAsync(request.EventDisplayId);
+            if (ev == null)
+            {
+                return NotFound(new ApiMessage("イベントが見つかりません"));
+            }
+
+            var participantToken = await ParticipantTokenAsync();
+            if (participantToken == null)
+            {
+                return NotFound(new ApiMessage("参加者cookieがありません"));
+            }
+
+            var ticket = await ticketRepository.FindActiveByParticipantTokenAsync(
+                participantToken.Value, ev.DisplayId);
+            if (ticket == null)
+            {
+                return NotFound(new ApiMessage("このイベントでの参加登録が見つかりません"));
+            }
+
+            var code = GenerateTransferCode();
+            ticket.TransferCodeHash = ComputeTransferCodeHash(code);
+            ticket.TransferCodeExpiresAt = DateTimeOffset.UtcNow.Add(TransferCodeLifetime);
+            await ticketRepository.SaveChangesAsync();
+
+            return Ok(new { code, expiresInMinutes = (int)TransferCodeLifetime.TotalMinutes });
+        }
+
+        /// <summary>
+        /// 引き継ぎコードによるチケットの復元(新しい端末から実行・cookie不要)。
+        /// 成功すると当該チケットの participantToken が付け替えられるため、
+        /// 元端末では同じチケットへアクセスできなくなる(重複利用の防止)。
+        /// 引き継ぎ先端末が既に参加者cookieを持つ場合はそのトークンを尊重し、
+        /// 別イベントの有効チケットとの紐付けを壊さない。
+        /// コードの消費は条件付き UPDATE で原子的に行われ、同一コードの並行利用でも
+        /// 1回限りの使用が保証される。
+        /// </summary>
+        [HttpPost("transfer/complete")]
+        public async Task<IActionResult> TransferComplete([FromBody] TransferCompleteRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                return BadRequest(new ApiMessage("引き継ぎコードを入力してください"));
+            }
+
+            var hash = ComputeTransferCodeHash(request.Code);
+            var ticket = await ticketRepository.FindActiveByTransferCodeAsync(hash);
+            if (ticket == null)
+            {
+                return NotFound(new ApiMessage("引き継ぎコードが無効か、有効期限が切れています。元の端末でコードを発行し直してください。"));
+            }
+
+            var evId = ticket.ParticipationGroupId != null
+                ? await applicationDbContext.ParticipationGroups
+                    .Where(g => g.Id == ticket.ParticipationGroupId)
+                    .Select(g => (Guid?)g.EventId)
+                    .FirstOrDefaultAsync()
+                : null;
+
+            // 引き継ぎ先端末の既存 cookie を上書きしない(レビュー指摘):
+            // cookie を新トークンで置き換えると、引き継ぎ先端末が保有する
+            // 別イベントの有効チケットとの紐付けが失われるため。
+            var existingCookieToken = await ParticipantTokenAsync();
+            var targetToken = existingCookieToken ?? Guid.CreateVersion7();
+
+            if (existingCookieToken != null && evId != null)
+            {
+                // 引き継ぎ先端末が同一イベントの有効チケットを既に持つ場合は重複となるため拒否
+                var alreadyJoined = await applicationDbContext.Tickets
+                    .AnyAsync(t => t.ParticipantToken == existingCookieToken
+                                && t.Status == TicketStatus.Registered
+                                && t.ParticipationGroup != null
+                                && t.ParticipationGroup.EventId == evId
+                                && t.Id != ticket.Id);
+                if (alreadyJoined)
+                {
+                    return Conflict(new ApiMessage("この端末は既にこのイベントに参加済みです。元の端末で参加を解除してからやり直してください。"));
+                }
+            }
+
+            // コードの消費とトークン付け替えを条件付き UPDATE で原子的に実行する。
+            // 同一コードでの並行リクエストでは単一の UPDATE のみ成功し、1回限りの使用を保証する。
+            var consumed = await applicationDbContext.Tickets
+                .Where(t => t.Id == ticket.Id
+                         && t.TransferCodeHash == hash
+                         && t.TransferCodeExpiresAt > DateTimeOffset.UtcNow)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.ParticipantToken, targetToken)
+                    .SetProperty(t => t.TransferCodeHash, (string?)null)
+                    .SetProperty(t => t.TransferCodeExpiresAt, (DateTimeOffset?)null));
+            if (consumed == 0)
+            {
+                // 並行リクエストに先に消費されたか、有効期限が切れている
+                return NotFound(new ApiMessage("引き継ぎコードが無効か、有効期限が切れています。元の端末でコードを発行し直してください。"));
+            }
+
+            // 引き継ぎ先端末が cookie を持っていなかった場合のみ新規発行
+            if (existingCookieToken == null)
+            {
+                await IssueParticipantCookieAsync(targetToken);
+            }
+
+            return Ok(new { ticketDisplayId = ticket.DisplayId.ToString() });
+        }
+
+        private static string GenerateTransferCode()
+        {
+            Span<char> chars = stackalloc char[8];
+            for (var i = 0; i < chars.Length; i++)
+            {
+                chars[i] = TransferCodeChars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(0, TransferCodeChars.Length)];
+            }
+            return new string(chars);
+        }
+
+        private static string ComputeTransferCodeHash(string code)
+        {
+            var bytes = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(code.Trim().ToUpperInvariant()));
+            return Convert.ToHexString(bytes);
+        }
+
+        /// <summary>グループ参加QRのPNG(代表者の電子券画面に表示、設計§8)</summary>
         [HttpGet("group/{joinToken}/qrcode")]
         public async Task<IActionResult> GetGroupQrCode(string joinToken)
         {

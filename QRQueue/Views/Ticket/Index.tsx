@@ -15,6 +15,36 @@ export default function Index({ model }: { model: Model }) {
     const [notification, setNotification] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
+    const [transferCode, setTransferCode] = useState<string | null>(null);
+    const [transferring, setTransferring] = useState(false);
+
+    // 別端末への引き継ぎ(issue #75):
+    // 元端末で引き継ぎコードを発行し、新しい端末の /transfer で入力すると
+    // チケットが新しい端末へ移る(元端末では以後使用できない)
+    async function startTransfer() {
+        if (!ticketData?.eventId) return;
+        if (!confirm("別の端末へ引き継ぐためのコードを発行しますか?\n引き継ぎ後は、この端末ではこのチケットを使用できなくなります。")) return;
+        setTransferring(true);
+        try {
+            const res = await fetch("/api/entry/transfer/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTransferCode(data.code);
+            } else {
+                const message = await res.text();
+                alert(message || "引き継ぎコードの発行に失敗しました");
+            }
+        } catch (err) {
+            console.error("引き継ぎコードの発行に失敗:", err);
+            alert("通信エラーが発生しました");
+        } finally {
+            setTransferring(false);
+        }
+    }
 
     // 「ホーム画面に追加」導線:  standalone で開いていないときだけ案内
     useEffect(() => {
@@ -375,6 +405,28 @@ export default function Index({ model }: { model: Model }) {
                                     width={260}
                                     height={260}
                                 />
+                            </div>
+                        )}
+
+                        {transferCode ? (
+                            <div class="transfer-box">
+                                <div class="heading">引き継ぎコード</div>
+                                <div class="transfer-code">{transferCode}</div>
+                                <p class="transfer-note">
+                                    新しい端末で <strong>/transfer</strong> を開き、このコードを入力してください。
+                                    <br />有効期限は10分・1回のみ使用できます。
+                                    <br />引き継ぎ後、この端末ではチケットを表示できなくなります。
+                                </p>
+                            </div>
+                        ) : (
+                            <div class="transfer-box">
+                                <button
+                                    class="transfer-btn"
+                                    onClick={startTransfer}
+                                    disabled={transferring}
+                                >
+                                    {transferring ? "発行中..." : "📱 別の端末へ引き継ぐ"}
+                                </button>
                             </div>
                         )}
 
