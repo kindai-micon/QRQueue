@@ -38,6 +38,8 @@ Preparing ──受付開始──▶ Open ──受付終了──▶ QueueClos
 - 待機キュー(Waiting / Calling / Interrupted / Draft)は**そのまま維持**される。
 - 呼び出し待ちの Draft グループ(受付確定前)は、そのまま受付確定(Waitingへ)できる
   (#66 の受付フローで確定操作は引き続き可能)。
+  ※なお `Draft` は現行の `GroupStatus` には存在せず、issue #66(未実装)で
+  追加予定の状態である。実装は #66 完了後を前提とする。
 - 参加者の電子券・Push通知は引き続き機能する。
 
 ### 3.2 運用終了(Finished)に遷移したとき
@@ -46,7 +48,7 @@ Preparing ──受付開始──▶ Open ──受付終了──▶ QueueClos
 
 | 残存状態 | 運用終了時の扱い |
 |---|---|
-| Draft(受付確定前) | Cancelled(受付確定されていないため無効) |
+| Draft(受付確定前) | Cancelled(受付確定されていないため無効)。※Draft は issue #66 で追加予定の状態 |
 | Waiting(呼び出し待ち) | 参加者による取消ではなく**運用終了による未参加**として `Cancelled` |
 | Calling(呼び出し中・未チェックイン) | 同上(`Cancelled`) |
 | Interrupted(優先待機) | 同上(`Cancelled`) |
@@ -79,6 +81,7 @@ Preparing ──受付開始──▶ Open ──受付終了──▶ QueueClos
 | 項目 | 内容 |
 |---|---|
 | 状態追加 | `EventStatus` に `QueueClosed` / `Finished` を追加(migration 必要) |
+| 状態追加 | `GroupStatus` に `Draft`(受付確定前)を追加。ただしこれは issue #66(受付フロー再設計)のスコープであり、本変更の前提として #66 の完了が必要 |
 | API | `CallController` に `finish/{eventDisplayId}`(運用終了)を追加。`close` は QueueClosed 相当 |
 | 参加者画面 | `/entry/{id}`・電子券画面に Finished 時の案内表示 |
 | スタッフ画面 | 呼び出しコンソールに「運用終了」ボタン(残存グループ数つき確認)を追加 |
