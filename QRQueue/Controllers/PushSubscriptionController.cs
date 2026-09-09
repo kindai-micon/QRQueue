@@ -27,6 +27,14 @@ namespace QRQueue.Controllers
         [HttpPost("{guid}/test")]
         public async Task<IActionResult> SendTest([FromRoute] Guid guid)
         {
+            // チケットの正当な所有者のみテスト通知を送信できる(issue #64/#80)。
+            // 検証がないと第三者がチケットIDを知るだけで対象端末へ通知を送れる。
+            var ownershipError = await CheckTicketOwnershipAsync(guid);
+            if (ownershipError != null)
+            {
+                return ownershipError;
+            }
+
             var report = await _pushSubscriptionService.SendTestAsync(guid);
 
             if (report.Subscriptions == 0)
