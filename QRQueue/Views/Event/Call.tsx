@@ -115,6 +115,20 @@ export default function Call({ model }: { model: Model }) {
         }
     }
 
+    // スタッフによるグループ単位の操作(優先待機移動・棄権)(issue #73)。
+    // 誤操作防止のため、実行前に確認ダイアログを表示する。
+    async function staffGroupAction(g: GroupView, op: "interrupt" | "forfeit") {
+        if (!g.displayId) return;
+        const label = `${g.number}番(メンバー ${g.people} 人)`;
+        const confirmText = op === "interrupt"
+            ? `${label} を優先待機へ移動しますか?`
+            : `${label} を棄権扱いにして、チケットを無効化しますか?\nこの操作は取り消せません。`;
+        if (!confirm(confirmText)) return;
+
+        action(op, () => fetch(`/api/call/group/${g.displayId}/${op}`, { method: "PUT" }),
+            op === "interrupt" ? "優先待機へ移動しました" : "棄権処理を行いました(チケットを無効化しました)");
+    }
+
     const groupTable = (groups: GroupView[]) => (
         <table class="data-table">
             <thead>
@@ -206,7 +220,7 @@ export default function Call({ model }: { model: Model }) {
                                     </div>
                                     <table class="data-table">
                                         <thead>
-                                            <tr><th>グループ番号</th><th>人数</th><th>到着状態</th></tr>
+                                            <tr><th>グループ番号</th><th>人数</th><th>到着状態</th><th>操作</th></tr>
                                         </thead>
                                         <tbody>
                                             {slot.groups.map((g, i) => (
@@ -214,6 +228,26 @@ export default function Call({ model }: { model: Model }) {
                                                     <td>{g.number}</td>
                                                     <td>{g.people}</td>
                                                     <td>{groupStatusLabel(g.status)}</td>
+                                                    <td>
+                                                        {(g.status === 2 || g.status === 4) && (
+                                                            <button
+                                                                class="btn-secondary btn-sm"
+                                                                disabled={busy}
+                                                                onClick={() => staffGroupAction(g, "interrupt")}
+                                                            >
+                                                                優先待機へ
+                                                            </button>
+                                                        )}
+                                                        {g.status !== 5 && (
+                                                            <button
+                                                                class="btn-danger btn-sm"
+                                                                disabled={busy}
+                                                                onClick={() => staffGroupAction(g, "forfeit")}
+                                                            >
+                                                                棄権
+                                                            </button>
+                                                        )}
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
