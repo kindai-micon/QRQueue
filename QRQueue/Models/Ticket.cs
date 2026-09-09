@@ -18,6 +18,10 @@ namespace QRQueue.Models
         public TicketStatus Status { get; set; } = TicketStatus.Registered;
         // 匿名デバイス識別(重複登録検知)
         public Guid? ParticipantToken { get; set; }
+        // チケット引き継ぎ(別端末への復元)用ワンタイムコードのSHA256ハッシュと有効期限(issue #75)。
+        // コード自体は保存せず、DB漏えい時にも悪用できないようにする。
+        public string? TransferCodeHash { get; set; }
+        public DateTimeOffset? TransferCodeExpiresAt { get; set; }
     }
     public enum TicketStatus
     {

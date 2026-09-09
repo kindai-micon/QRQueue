@@ -304,6 +304,18 @@ export default function Index({ model }: { model: Model }) {
                     )}
                 </div>
             </div>
+         )}
+
+            {eventInfo && !eventInfo.isOpen && (
+                <p>現在、受付を行っていません。</p>
+            )}
+
+            <p style={{ fontSize: "0.85rem" }}>
+                別の端末から引き継ぐ(引き継ぎコードをお持ちの方は)
+                <a href="/transfer">こちら</a>
+            </p>
+
+        </div>
         </Layout>
     );
 }
