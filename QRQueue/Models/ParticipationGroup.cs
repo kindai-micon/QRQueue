@@ -17,6 +17,9 @@ namespace QRQueue.Models
         // 方式③のみ。代表者が共有する招待トークン
         public string? JoinToken { get; set; }
         public GroupStatus Status { get; set; } = GroupStatus.Waiting;
+        // 他グループとの同時参加(マッチング)を許可するか(issue #66、#72)。
+        // 3人に達した場合は自動で false になり変更できない。
+        public bool AllowCoJoin { get; set; } = true;
         // 最後の呼び出し時刻
         public DateTimeOffset? CalledAt { get; set; }
         // 再呼び出し回数
@@ -42,5 +45,6 @@ namespace QRQueue.Models
         Interrupted, // 割り込みpool: 「次を呼ぶ」で未チェックインのまま退避された
         Completed,   // チェックイン済み(受け渡し完了)
         Cancelled,   // 上書き・キャンセルにより無効
+        Draft,       // 受付確定前: 代表者が「受付」を確定するまで呼び出し対象にならない(issue #66)
     }
 }

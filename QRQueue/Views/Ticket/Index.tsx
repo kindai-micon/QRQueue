@@ -85,6 +85,54 @@ export default function Index({ model }: { model: Model }) {
         return data.publicKey;
     }
 
+    // ===== 受付確定フロー(issue #66) =====
+    const isDraft = ticketData?.status === "Draft";
+    const draftMemberCount = ticketData?.memberCount ?? 1;
+
+    // 同時参加可否の変更(受付確定前のみ、3人では変更不可)
+    async function setCoJoin(allow: boolean) {
+        if (!ticketData?.eventId) return;
+        try {
+            const res = await fetch("/api/entry/group/cojoin", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId, allowCoJoin: allow }),
+            });
+            if (!res.ok) {
+                const message = await res.text();
+                alert(message || "変更できませんでした");
+                window.location.reload();
+            } else {
+                window.location.reload();
+            }
+        } catch (err) {
+            console.error("同時参加可否の変更に失敗:", err);
+            alert("通信エラーが発生しました");
+        }
+    }
+
+    // 受付確定: 代表者が「受付」を押すと呼び出し番号が採番され、待機キューに追加される
+    async function confirmGroup() {
+        if (!ticketData?.eventId) return;
+        if (!confirm("受付を確定しますか?\n確定後は人数と同時参加可否を変更できません。")) return;
+        try {
+            const res = await fetch("/api/entry/group/confirm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId }),
+            });
+            if (res.ok) {
+                window.location.reload();
+                return;
+            }
+            const message = await res.text();
+            alert(message || "受付を確定できませんでした");
+        } catch (err) {
+            console.error("受付確定に失敗:", err);
+            alert("通信エラーが発生しました");
+        }
+    }
+
     function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
         const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
         const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -332,7 +380,38 @@ export default function Index({ model }: { model: Model }) {
                             {ticketData.status === "Matching" && (
                                 <div class="ticket-number-sub">グループが揃い次第、番号が確定します</div>
                             )}
+                            {isDraft && (
+                                <div class="ticket-number-sub">「受付」を押すと番号が確定します</div>
+                            )}
                         </div>
+
+                        {/* 受付確定パネル(代表者・受付確定前のみ、issue #66) */}
+                        {isDraft && ticketData.isRepresentative && (
+                            <div class="draft-panel">
+                                <div class="draft-members">
+                                    現在の人数: <strong>{draftMemberCount}</strong> / 3 人
+                                </div>
+                                <label class="draft-cojoin">
+                                    <input
+                                        type="checkbox"
+                                        checked={ticketData.allowCoJoin === true}
+                                        disabled={draftMemberCount >= 3}
+                                        onChange={(e) => setCoJoin(e.currentTarget.checked)}
+                                    />
+                                    他のグループと一緒に参加してもよい(3人未満の場合のみ)
+                                </label>
+                                {draftMemberCount >= 3 && (
+                                    <div class="draft-note">3人に達したため、同時参加はオフで固定です。</div>
+                                )}
+                                <button class="confirm-btn" onClick={confirmGroup}>
+                                    ✅ 受付を確定する
+                                </button>
+                                <div class="draft-note">
+                                    受付を確定するまで呼び出されることはありません。
+                                    確定後は人数・同時参加可否を変更できません。
+                                </div>
+                            </div>
+                        )}
 
                         <div class="ticket-info">
                             <div class="heading">ステータス</div>
