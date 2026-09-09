@@ -1,22 +1,25 @@
 namespace QRQueue.Services
 {
     /// <summary>
-    /// 受付確認用QRコードに埋め込む到着確認コードの発行・検証(issue #68)。
-    /// チェックインは受付に掲示された確認用QR(確認コード付きURL)を起点としてのみ行える。
-    /// コードはイベントIDとサーバー秘密鍵から導出される安定した値で、
-    /// 確認用QR以外のURL(電子券画面からの直接リンク等)では到着確認を完了できない。
+    /// 受付確認用QRコードに埋め込む到着確認コードの発行・検証。
+    /// issue #68: チェックインは受付に掲示された確認用QR(確認コード付きURL)を起点としてのみ行える。
+    /// issue #76: コードは30秒で回転する方式へ移行し、
+    /// QRの撮影・共有・履歴からの再利用を制限する。
     /// </summary>
     public interface ICheckinCodeService
     {
-        /// <summary>イベントの到着確認コードを取得する(受付確認QRのURLに埋め込む)</summary>
-        Task<string> GetCheckinCodeAsync(Guid eventDisplayId);
+        /// <summary>現在の到着確認コードを取得する(受付確認QRのURLに埋め込む)</summary>
+        Task<string> GetCurrentCheckinCodeAsync(Guid eventDisplayId);
 
-        /// <summary>到着確認コードが正しいか検証する</summary>
+        /// <summary>到着確認コードが正しいか検証する(直前ウィンドウの許容を含む)</summary>
         Task<bool> IsValidAsync(Guid eventDisplayId, string? code);
     }
 
     public class CheckinCodeService(IConfiguration configuration, IVapidService vapidService) : ICheckinCodeService
     {
+        /// <summary>コードの更新間隔(秒)。受付画面のQRはこの間隔で更新される</summary>
+        public const int WindowSeconds = 30;
+
         private byte[]? cachedKey;
 
         /// <summary>
@@ -46,9 +49,9 @@ namespace QRQueue.Services
             return key;
         }
 
-        public async Task<string> GetCheckinCodeAsync(Guid eventDisplayId)
+        public async Task<string> GetCurrentCheckinCodeAsync(Guid eventDisplayId)
         {
-            return Compute(await GetKeyAsync(), eventDisplayId);
+            return Compute(await GetKeyAsync(), eventDisplayId, CurrentWindow());
         }
 
         public async Task<bool> IsValidAsync(Guid eventDisplayId, string? code)
@@ -57,16 +60,36 @@ namespace QRQueue.Services
             {
                 return false;
             }
-            var expected = Compute(await GetKeyAsync(), eventDisplayId);
-            // 恒時間比較で検証する
-            return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(code.Trim()),
-                System.Text.Encoding.UTF8.GetBytes(expected));
+
+            var key = await GetKeyAsync();
+
+            // 現在ウィンドウと直前ウィンドウを許容(QR更新タイミング・時計ずれの吸収)。
+            // それより古いコードは拒否されるため、撮影・共有されたQRの再利用は制限される。
+            var current = CurrentWindow();
+            foreach (var window in new long[] { current, current - 1 })
+            {
+                var expected = Compute(key, eventDisplayId, window);
+                if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(code.Trim()),
+                    System.Text.Encoding.UTF8.GetBytes(expected)))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
-        private static string Compute(byte[] key, Guid eventDisplayId)
+        private static long CurrentWindow()
         {
-            var hash = System.Security.Cryptography.HMACSHA256.HashData(key, eventDisplayId.ToByteArray());
+            return DateTimeOffset.UtcNow.ToUnixTimeSeconds() / WindowSeconds;
+        }
+
+        private static string Compute(byte[] key, Guid eventDisplayId, long window)
+        {
+            var input = new byte[16 + 8];
+            eventDisplayId.ToByteArray().CopyTo(input, 0);
+            BitConverter.GetBytes(window).CopyTo(input, 16);
+            var hash = System.Security.Cryptography.HMACSHA256.HashData(key, input);
             // 16進16桁(64bit)。8桁だと推測耐性が不十分のため延長した(レビュー指摘)。
             // HMAC鍵はサーバー秘匿のためオフライン総当たりは不可能だが、
             // 在線総当たりの窓を狭める意味でも十分な長さを確保する。
