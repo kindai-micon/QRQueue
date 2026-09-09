@@ -31,7 +31,8 @@ namespace QRQueue.Controllers
         IQrCodeGenerator qrCodeGenerator,
         IHubContext<QueueHub> hubContext,
         IConfiguration configuration,
-        ApplicationDbContext applicationDbContext) : ControllerBase
+        ApplicationDbContext applicationDbContext,
+        ICheckinCodeService checkinCodeService) : ControllerBase
     {
         /// <summary>1グループの最大参加人数(設計§4)</summary>
         private const int MaxGroupSize = 3;
@@ -39,6 +40,7 @@ namespace QRQueue.Controllers
         public record JoinRequest(Guid EventDisplayId, string Mode, bool Overwrite);
         public record EventRequest(Guid EventDisplayId);
         public record GroupJoinRequest(string JoinToken);
+        public record CheckinRequest(Guid EventDisplayId, string? ReceptionCode);
 
         /// <summary>参加登録画面の初期化(イベント名・受付状態・グループ上限)</summary>
         [HttpGet("{eventDisplayId}")]
@@ -218,14 +220,23 @@ namespace QRQueue.Controllers
         /// Calling なら Completed に確定して AutoNext を発火。Interrupted なら同様に完了し、
         /// 次の呼び出しに割り込んで処理対象にする。Waiting/Matching なら 409。
         /// 代表者でない場合も 409。
+        /// issue #68: 受付に掲示された確認用QR(到着確認コード付きURL)から開かれた
+        /// リクエストのみ受け付ける。確認コードが無効・欠落の場合は理由とともに 403。
         /// </summary>
         [HttpPost("checkin")]
-        public async Task<ActionResult<CheckinResult>> Checkin([FromBody] EventRequest request)
+        public async Task<ActionResult<CheckinResult>> Checkin([FromBody] CheckinRequest request)
         {
             var ev = await eventRepository.FindByDisplayIdAsync(request.EventDisplayId);
             if (ev == null)
             {
                 return NotFound(new ApiMessage("イベントが見つかりません"));
+            }
+
+            // 受付確認用QRの到着確認コード検証(issue #68)
+            if (!await checkinCodeService.IsValidAsync(ev.DisplayId, request.ReceptionCode))
+            {
+                return StatusCode(403,
+                    new ApiMessage("受付に掲示された確認用QRコードから開いてください(確認コードが無効か、URLが直接入力されました)"));
             }
 
             var participantToken = await ParticipantTokenAsync();

@@ -331,13 +331,9 @@ export default function Index({ model }: { model: Model }) {
                                 <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>🔔</div>
                                 <div>呼び出されました！</div>
                                 <div class="alert-sub">
-                                    メンバーがそろうと受付のチェックインQRを読み取ってください。
+                                    受付に掲示された<strong>チェックインQR</strong>を読み取って、
+                                    到着を確認してください(issue #68: 電子券画面からは直接チェックインできません)。
                                 </div>
-                                {ticketData.eventId && (
-                                    <a class="alert-link" href={`/checkin/${ticketData.eventId}`}>
-                                        チェックイン画面へ(受付掲示QRの代わりにここからでも可)
-                                    </a>
-                                )}
                             </div>
                         )}
                         {isCalling && !ticketData.isRepresentative && (
@@ -356,11 +352,6 @@ export default function Index({ model }: { model: Model }) {
                                     メンバーがそろったら代表者が受付のチェックインQRを読み取ると、
                                     次の呼び出しに<strong>割り込んで</strong>優先的に処理されます。
                                 </div>
-                                {ticketData.eventId && ticketData.isRepresentative && (
-                                    <a class="alert-link" href={`/checkin/${ticketData.eventId}`}>
-                                        チェックイン画面へ
-                                    </a>
-                                )}
                             </div>
                         )}
 
