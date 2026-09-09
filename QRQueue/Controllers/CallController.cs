@@ -95,28 +95,39 @@ namespace QRQueue.Controllers
         [HttpPut("again/{eventDisplayId}")]
         public async Task<IActionResult> Again(Guid eventDisplayId)
         {
-            var callingGroup = await _db.ParticipationGroups
-                .Include(x => x.Tickets)
-                .FirstOrDefaultAsync(x =>
-                x.Event.DisplayId == eventDisplayId &&
-                x.Status == GroupStatus.Calling);
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+
+            // 再呼び出しもイベント排他制御下で直列化し、状態更新の競合を防ぐ(issue #82)
+            var callingGroup = await _queueCallService.RunExclusiveAsync(ev, async () =>
+            {
+                var group = await _db.ParticipationGroups
+                    .Include(x => x.Tickets)
+                    .FirstOrDefaultAsync(x =>
+                        x.Event.DisplayId == eventDisplayId &&
+                        x.Status == GroupStatus.Calling);
+                if (group == null)
+                {
+                    return null;
+                }
+                if (group.Tickets.Count == 0)    //チケットがなかった時を想定.
+                {
+                    return null;
+                }
+                await _pushSubscriptionService.SendNotifyTicketGroupAsync(group.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
+                group.CallCount++;
+                group.CalledAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync();
+                return group;
+            });
 
             if (callingGroup == null)
             {
                 return NotFound();
             }
-
-            if (callingGroup.Tickets.Count == 0)    //下のifでチケットがなかった時を想定.
-            {
-                return NotFound();
-            }
-            await _pushSubscriptionService.SendNotifyTicketGroupAsync(callingGroup.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
-            callingGroup.CallCount++;
-            callingGroup.CalledAt = DateTimeOffset.UtcNow;
-            
-
-            await _db.SaveChangesAsync();
-            
             return Ok();
         }
 
