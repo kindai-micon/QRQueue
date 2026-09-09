@@ -8,7 +8,7 @@ namespace QRQueue.Services;
 public interface IQueueCallService
 {
     /// <summary>
-    /// 「次を呼ぶ」(設計書)。
+    /// 「次を呼ぶ」(設計§4.6)。
     /// ① 現在呼び出し中(Calling)のグループを割り込みpool(Interrupted)へ退避し、
     /// ② 呼び出し先を優先順位どおり決定(Waiting先頭 → 方式②プール自動確定)して Calling へ移す。
     /// 呼び出せるグループがなければ null を返す。
@@ -16,24 +16,31 @@ public interface IQueueCallService
     /// </summary>
     Task<ParticipationGroup?> CallNextAsync(Event ev);
 
-    // ※「再呼び出し(CallAgain)」は管理向け(CallController)側の責務のため、ここでは提供しない
+    // ※「再呼び出し(CallAgain)」は管理向け(CallController)側の責務のため、ここでは提供しない(§6.2)
 
     /// <summary>
-    /// 方式②のグループ成立(設計書)。プールの参加順先頭 memberCount 人で1グループを成立させ、
+    /// 方式②のグループ成立(設計§4.2)。プールの参加順先頭 memberCount 人で1グループを成立させ、
     /// 採番して Waiting へ載せる。満員成立(join側)と自動確定(next側)の共用。
     /// プールが空なら null。
     /// </summary>
     Task<ParticipationGroup?> FormGroupFromMatchingPoolAsync(Event ev, int memberCount);
 
-    /// <summary>呼び出しの通知: SignalR(Called/QueueChanged) + 対象グループ全員へ Web Push(設計書)</summary>
+    /// <summary>呼び出しの通知: SignalR(Called/QueueChanged) + 対象グループ全員へ Web Push(設計§7)</summary>
     Task AnnounceAsync(Event ev, ParticipationGroup group);
+
+    /// <summary>
+    /// 未到着による遅延が一定時間(QueueCall:SlotTimeoutMinutes、既定5分)を超えた
+    /// ゲーム参加枠の未到着グループを優先待機(Interrupted)へ退避する(issue #69)。
+    /// </summary>
+    Task EvacuateExpiredSlotGroupsAsync(Event ev);
 }
 
 public class QueueCallService(
     IParticipationGroupRepository groupRepository,
     IGroupNumberIssuanceService groupNumberIssuanceService,
     IPushSubscriptionService pushSubscriptionService,
-    IHubContext<QueueHub> hubContext) : IQueueCallService
+    IHubContext<QueueHub> hubContext,
+    IConfiguration configuration) : IQueueCallService
 {
     public async Task<ParticipationGroup?> CallNextAsync(Event ev)
     {
@@ -70,11 +77,14 @@ public class QueueCallService(
         }
 
         // ③ 選択された組み合わせ(=同じゲーム参加枠)をまとめて Calling へ移す。
-        //    元のグループ・代表者・グループ番号は維持される(マッチングでグループを併合しない)
+        //    元のグループ・代表者・グループ番号は維持される(マッチングでグループを併合しない)。
+        //    同時に呼び出されたグループ群には共通の GameSlotId を付与する(issue #69)
+        var slotId = Guid.CreateVersion7();
         foreach (var group in selected)
         {
             group.Status = GroupStatus.Calling;
             group.CalledAt = DateTimeOffset.UtcNow;
+            group.GameSlotId = slotId;
         }
         await groupRepository.SaveChangesAsync();
 
@@ -83,6 +93,46 @@ public class QueueCallService(
             await AnnounceAsync(ev, group);
         }
         return selected[0];
+    }
+
+    /// <summary>
+    /// 未到着による遅延が一定時間を超えたゲーム参加枠を処理する(issue #69)。
+    /// 枠内の一部グループのみ到着(代表者チェックイン=Completed)していて、未到着(Calling)の
+    /// グループが timeout を超過している場合、未到着グループを割り込みpool(Interrupted/優先待機)へ
+    /// 退避する。到着済みグループだけでゲームを進められるようにするための処理。
+    /// 到着済みグループは Completed(受付完了)のまま維持される。
+    /// 遅れて到着した未到着グループは、代表者のチェックインで従来どおり
+    /// 割り込み優先で処理される(Interrupted → Completed)。
+    /// スタッフのキュー表示(モニタリング)のタイミングで評価される。
+    /// </summary>
+    public async Task EvacuateExpiredSlotGroupsAsync(Event ev)
+    {
+        var timeoutMinutes = configuration.GetValue<int?>("QueueCall:SlotTimeoutMinutes") ?? 5;
+        var deadline = DateTimeOffset.UtcNow.AddMinutes(-timeoutMinutes);
+
+        var activeGroups = await groupRepository.GetCallingAsync(ev.Id);
+
+        // 枠ごとに到着状況を評価: 同一 GameSlotId 内に「到着済み(Completed)」が存在する場合のみ
+        // タイムアウト判定を行う(誰も到着していない枠はまだ待つ)
+        var groupsBySlot = activeGroups
+            .Where(g => g.GameSlotId != null)
+            .GroupBy(g => g.GameSlotId!.Value)
+            .ToList();
+
+        foreach (var slot in groupsBySlot)
+        {
+            var hasArrived = await groupRepository.HasArrivedGroupAsync(ev.Id, slot.Key);
+            if (!hasArrived)
+            {
+                continue;
+            }
+            foreach (var group in slot.Where(g => g.CalledAt != null && g.CalledAt < deadline))
+            {
+                group.Status = GroupStatus.Interrupted;
+            }
+        }
+
+        await groupRepository.SaveChangesAsync();
     }
 
     /// <summary>
@@ -162,7 +212,7 @@ public class QueueCallService(
         var survivor = pool[0];
         foreach (var other in pool.Skip(1).Take(memberCount - 1))
         {
-            // チケットの付け替え(DisplayId は変わらないため Push 購読も引き継がれる)
+            // チケットの付け替え(DisplayId は変わらないため Push 購読も引き継がれる §4.4)
             foreach (var ticket in other.Tickets)
             {
                 ticket.ParticipationGroupId = survivor.Id;

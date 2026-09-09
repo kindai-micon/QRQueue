@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -126,7 +126,15 @@ namespace QRQueue.Controllers
         {
             var view = new QueueView();
 
-            // 先頭が「次に呼ぶグループ」になるよう番号順に固定(先着順)
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+
+            // 一定時間を超えた未到着グループを優先待機へ退避(issue #69)
+            await _queueCallService.EvacuateExpiredSlotGroupsAsync(ev);
+
             var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).ToListAsync();
 
             var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).OrderBy(x => x.CalledAt).ToListAsync();
@@ -157,6 +165,40 @@ namespace QRQueue.Controllers
             });
 
             view.PeoplePool = matchingGroups.Sum(x => x.Tickets.Count(t => t.Status != TicketStatus.Cancelled));
+
+            // ゲーム参加枠ごとの到着状況(issue #69):
+            // Calling/Interrupted のグループが属する枠(=まだ処理中の枠)を対象に、
+            // 枠内の各グループの到着(チェックイン)状態を返す
+            var activeSlotIds = callingGroups.Concat(interruptedGroups)
+                .Where(x => x.GameSlotId != null)
+                .Select(x => x.GameSlotId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (activeSlotIds.Count > 0)
+            {
+                var slotGroups = await _db.ParticipationGroups
+                    .Include(x => x.Tickets)
+                    .Where(x => x.Event.DisplayId == eventDisplayId && activeSlotIds.Contains(x.GameSlotId!.Value))
+                    .ToListAsync();
+
+                view.Slots = slotGroups
+                    .GroupBy(x => x.GameSlotId!.Value)
+                    .Select(g => new GameSlotView
+                    {
+                        SlotId = g.Key.ToString(),
+                        CalledAt = g.Max(x => x.CalledAt),
+                        AllArrived = g.All(x => x.Status == GroupStatus.Completed),
+                        Groups = g.OrderBy(x => x.Number).Select(x => new ParticipationGroupView
+                        {
+                            Number = x.Number,
+                            People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
+                            Status = x.Status
+                        })
+                    })
+                    .OrderByDescending(x => x.CalledAt)
+                    .ToList();
+            }
 
             return view;
         }

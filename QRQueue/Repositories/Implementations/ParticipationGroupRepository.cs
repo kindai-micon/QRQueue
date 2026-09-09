@@ -65,6 +65,14 @@ namespace QRQueue.Repositories.Implementations
                 .ToListAsync();
         }
 
+        public Task<bool> HasArrivedGroupAsync(Guid eventId, Guid slotId)
+        {
+            return applicationDbContext.ParticipationGroups
+                .AnyAsync(x => x.EventId == eventId
+                    && x.GameSlotId == slotId
+                    && x.Status == GroupStatus.Completed);
+        }
+
         public async Task<long> GetMaxNumberAsync(Guid eventId)
         {
             return await applicationDbContext.ParticipationGroups

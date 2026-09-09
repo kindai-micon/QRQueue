@@ -20,6 +20,9 @@ namespace QRQueue.Models
         // 他グループとの同時参加(マッチング)を許可するか(issue #66、#72)。
         // 3人に達した場合は自動で false になり変更できない。
         public bool AllowCoJoin { get; set; } = true;
+        // 同じゲーム参加枠に割り当てられた識別子(issue #69)。
+        // 呼び出し時に、マッチングで組み合わされたグループ群に共通の値が設定される。
+        public Guid? GameSlotId { get; set; }
         // 最後の呼び出し時刻
         public DateTimeOffset? CalledAt { get; set; }
         // 再呼び出し回数

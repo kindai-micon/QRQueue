@@ -192,6 +192,40 @@ export default function Call({ model }: { model: Model }) {
 
                 <div class="call-panels">
                     <section class="call-panel">
+                        <h2>ゲーム参加枠の到着状況(issue #69)</h2>
+                        {(queue?.slots?.length ?? 0) === 0 ? (
+                            <p class="call-pool" style={{ fontSize: "0.9rem", color: "#888" }}>処理中の枠はありません</p>
+                        ) : (
+                            queue!.slots!.map((slot) => (
+                                <div class="slot-block" key={slot.slotId}>
+                                    <div class="slot-title">
+                                        {slot.allArrived ? "✅ 全グループ到着済み" : "⏳ 到着確認中"}
+                                        <span class="slot-time">
+                                            {slot.calledAt ? `(${new Date(slot.calledAt).toLocaleTimeString("ja-JP")} 呼び出し)` : ""}
+                                        </span>
+                                    </div>
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr><th>グループ番号</th><th>人数</th><th>到着状態</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {slot.groups.map((g, i) => (
+                                                <tr key={`${slot.slotId}-${g.number}-${i}`}>
+                                                    <td>{g.number}</td>
+                                                    <td>{g.people}</td>
+                                                    <td>{groupStatusLabel(g.status)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ))
+                        )}
+                        <p class="call-hint">
+                            未到着グループが一定時間(既定5分)を超えると優先待機へ移動します(QueueCall:SlotTimeoutMinutes で変更可)。
+                        </p>
+                    </section>
+                    <section class="call-panel">
                         <h2>現在の呼び出し中</h2>
                         {groupTable(queue?.callingGroup ?? [])}
                     </section>
