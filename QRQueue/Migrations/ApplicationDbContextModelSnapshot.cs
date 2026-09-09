@@ -587,7 +587,8 @@ namespace QRQueue.Migrations
                 {
                     b.HasOne("QRQueue.Models.ParticipationGroup", "ParticipationGroup")
                         .WithMany("Tickets")
-                        .HasForeignKey("ParticipationGroupId");
+                        .HasForeignKey("ParticipationGroupId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("ParticipationGroup");
                 });

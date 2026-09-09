@@ -1,15 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-
-type SendRole = {
-    name: string;
-    authorities: { name: string }[];
-};
-
-type SendUser = {
-    userName: string;
-    roles: SendRole[];
-};
+import MessageModal from "@/Shared/Modal";
+import { readErrorMessage, type SendRole, type SendUser } from "@/Shared/api";
 
 type Model = {
     username: string;
@@ -24,6 +16,12 @@ export default function Detail({ model }: { model: Model }) {
     const [availableRoles, setAvailableRoles] = useState<SendRole[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [roleToRemove, setRoleToRemove] = useState<SendRole | null>(null);
+    const [resetPassword, setResetPassword] = useState("");
+    const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+    const [showResetPassword, setShowResetPassword] = useState(false);
+    const [resetError, setResetError] = useState<string | null>(null);
+    const [resetSubmitting, setResetSubmitting] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -36,11 +34,11 @@ export default function Detail({ model }: { model: Model }) {
             try {
                 const res = await fetch(`/api/user/UserInfo?username=${encodeURIComponent(model.username)}`);
                 if (!res.ok) throw new Error(`Error ${res.status}`);
-                setUser(await res.json());
+                setUser(await res.json() as SendUser);
 
                 const rolesRes = await fetch("/api/Role/RoleList");
                 if (!rolesRes.ok) throw new Error(`ロール一覧取得失敗: ${rolesRes.status}`);
-                setAvailableRoles(await rolesRes.json());
+                setAvailableRoles(await rolesRes.json() as SendRole[]);
             } catch (e) {
                 setError((e as Error).message);
             } finally {
@@ -73,7 +71,7 @@ export default function Detail({ model }: { model: Model }) {
             setNewRoleName("");
         } else {
             const text = await response.text();
-            alert("ロール追加失敗: " + text);
+            setNotice("ロール追加失敗: " + text);
         }
     }
 
@@ -90,16 +88,60 @@ export default function Detail({ model }: { model: Model }) {
             setUser({ ...user, roles: user.roles.filter((r) => r.name !== roleToRemove.name) });
         } else {
             const text = await response.text();
-            alert("ロール削除失敗: " + text);
+            setNotice("ロール削除失敗: " + text);
         }
 
         setRoleToRemove(null);
         setShowModal(false);
     }
 
+    // 管理者によるパスワード再設定(現在のパスワードは不要)
+    async function resetPasswordSubmit(e: Event) {
+        e.preventDefault();
+        if (!user) return;
+        setResetError(null);
+
+        if (!resetPassword || !resetConfirmPassword) {
+            setResetError("すべての項目を入力してください。");
+            return;
+        }
+        if (resetPassword !== resetConfirmPassword) {
+            setResetError("パスワードが一致しません。");
+            return;
+        }
+        setResetSubmitting(true);
+
+        try {
+            const response = await fetch("/api/user/ResetPassword", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userName: user.userName,
+                    newPassword: resetPassword,
+                    confirmPassword: resetConfirmPassword,
+                }),
+            });
+
+            if (response.ok) {
+                setResetPassword("");
+                setResetConfirmPassword("");
+                setNotice("パスワードを変更しました。");
+            } else {
+                // 統一エラー形式 ApiMessage(IdentityError もサーバー側で結合済み)
+                setResetError(await readErrorMessage(response));
+            }
+        } catch (err) {
+            console.log(err);
+            setResetError("通信エラーが発生しました。");
+        } finally {
+            setResetSubmitting(false);
+        }
+    }
+
     return (
-        <Layout>
+        <Layout title="ユーザー詳細 | QRQueue">
             <link rel="stylesheet" href="/css/users-detail.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             {showModal && roleToRemove && (
                 <div class="modal-overlay">
                     <div class="modal">
@@ -130,6 +172,42 @@ export default function Detail({ model }: { model: Model }) {
                         <div class="section">
                             <div class="label">ユーザー名:</div>
                             <div>{user.userName}</div>
+                        </div>
+                        <div class="section">
+                            <div class="label">パスワード再設定:</div>
+                            {resetError && <p class="error">{resetError}</p>}
+                            <form style={{ marginTop: "8px" }} onSubmit={resetPasswordSubmit}>
+                                <div class="form-group">
+                                    <label for="resetPassword">新しいパスワード</label>
+                                    <div class="password-input">
+                                        <input
+                                            type={showResetPassword ? "text" : "password"}
+                                            id="resetPassword"
+                                            value={resetPassword}
+                                            autoComplete="new-password"
+                                            onInput={(e) => setResetPassword(e.currentTarget.value)}
+                                        />
+                                        <button type="button" class="password-toggle" onClick={() => setShowResetPassword(!showResetPassword)}>
+                                            {showResetPassword ? "非表示" : "表示"}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="resetConfirmPassword">新しいパスワード（確認）</label>
+                                    <div class="password-input">
+                                        <input
+                                            type={showResetPassword ? "text" : "password"}
+                                            id="resetConfirmPassword"
+                                            value={resetConfirmPassword}
+                                            autoComplete="new-password"
+                                            onInput={(e) => setResetConfirmPassword(e.currentTarget.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-primary btn-sm" disabled={resetSubmitting}>
+                                    {resetSubmitting ? "変更中..." : "パスワードを変更"}
+                                </button>
+                            </form>
                         </div>
                         <div class="section">
                             <div class="label">ロール一覧:</div>

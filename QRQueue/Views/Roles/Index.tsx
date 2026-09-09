@@ -1,20 +1,14 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-
-type SendAuthority = {
-    name: string;
-};
-
-type SendRole = {
-    name: string;
-    authorities: SendAuthority[];
-};
+import MessageModal from "@/Shared/Modal";
+import type { SendRole } from "@/Shared/api";
 
 // SvelteKit routes/roles/+page.svelte から移行
 export default function Index() {
     const [roles, setRoles] = useState<SendRole[]>([]);
     const [authorityList, setAuthorityList] = useState<string[]>([]);
     const [newRoleName, setNewRoleName] = useState("");
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         fetchRoles();
@@ -23,12 +17,12 @@ export default function Index() {
 
     async function fetchRoles() {
         const res = await fetch("/api/Role/RoleList");
-        setRoles(await res.json());
+        setRoles(await res.json() as SendRole[]);
     }
 
     async function fetchAuthorityList() {
         const res = await fetch("/api/Role/AuthorityList");
-        setAuthorityList(await res.json());
+        setAuthorityList(await res.json() as string[]);
     }
 
     async function addRole(e: Event) {
@@ -45,7 +39,7 @@ export default function Index() {
             setNewRoleName("");
             await fetchRoles();
         } else {
-            alert("ロールの追加に失敗しました");
+            setNotice("ロールの追加に失敗しました");
         }
     }
 
@@ -59,7 +53,7 @@ export default function Index() {
         if (res.ok) {
             await fetchRoles();
         } else {
-            alert("ロールの削除に失敗しました");
+            setNotice("ロールの削除に失敗しました");
         }
     }
 
@@ -80,8 +74,9 @@ export default function Index() {
     }
 
     return (
-        <Layout>
+        <Layout title="ロール管理 | QRQueue">
             <link rel="stylesheet" href="/css/roles.css" />
+            <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="roles-container">
                 <h2>ロール管理</h2>
                 <form class="input-area" onSubmit={addRole}>

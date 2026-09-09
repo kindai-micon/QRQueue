@@ -2,6 +2,8 @@
 
 近畿大学マイコン部が作成した抽選システム
 
+Powered by 近畿大学プログラミング研究部
+
 ## 構成
 
 - **QRQueue** - ASP.NET Core Web アプリ（バックエンド + JsxCore による TSX ビュー）

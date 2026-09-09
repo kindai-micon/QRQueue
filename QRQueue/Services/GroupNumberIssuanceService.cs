@@ -4,9 +4,9 @@ using QRQueue.Models;
 namespace QRQueue.Services;
 
 /// <summary>
-/// 先着順呼び出し番号の採番サービス(設計 §4.5)。
-/// 既存 `TicketIssuanceService` と同じく Serializable 分離レベルのトランザクション内で
-/// `MAX(Number)+1` 方式を行い、同時参加の採番競合を防ぐ。開始番号は旧踏襲で 1000 番。
+/// 先着順呼び出し番号の採番サービス(設計書)。
+/// Serializable 分離レベルのトランザクション内で `MAX(Number)+1` 方式を行い、
+/// 同時参加の採番競合を防ぐ。開始番号は旧踏襲で 1000 番。
 /// </summary>
 public interface IGroupNumberIssuanceService
 {
@@ -34,7 +34,7 @@ public class GroupNumberIssuanceService(ApplicationDbContext db) : IGroupNumberI
 
             group.Number = (maxNumber ?? 999) + 1;
 
-            // 採番とグループ・チケットの保存を一つのトランザクションで確定(§4.5)
+            // 採番とグループ・チケットの保存を一つのトランザクションで確定
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
         }

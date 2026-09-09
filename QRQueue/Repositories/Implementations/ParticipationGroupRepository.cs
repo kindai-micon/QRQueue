@@ -28,7 +28,9 @@ namespace QRQueue.Repositories.Implementations
 
         public Task<List<ParticipationGroup>> GetWaitingAsync(Guid eventId)
         {
+            // Tickets を含める(呼出通知 AnnounceAsync が group.Tickets で Push を送るため)
             return applicationDbContext.ParticipationGroups
+                .Include(x => x.Tickets)
                 .Where(x => x.EventId == eventId && x.Status == GroupStatus.Waiting)
                 .OrderBy(x => x.Number)
                 .ToListAsync();
@@ -44,7 +46,10 @@ namespace QRQueue.Repositories.Implementations
 
         public Task<List<ParticipationGroup>> GetMatchingPoolAsync(Guid eventId)
         {
+            // Tickets を含めて返す(FormGroupFromMatchingPoolAsync のチケット付け替えに必須。
+            // Include しないと付け替えが空回しになり FK 違反で成立処理が落ちる)
             return applicationDbContext.ParticipationGroups
+                .Include(x => x.Tickets)
                 .Where(x => x.EventId == eventId && x.Status == GroupStatus.Matching)
                 .OrderBy(x => x.Created)
                 .ToListAsync();

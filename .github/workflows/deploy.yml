@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      # Tailscale Workload Identity Federation 用: GitHub OIDC トークンの発行を許可する
+      id-token: write
 
     steps:
       - name: Checkout code
@@ -21,53 +24,126 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore QRQueue/QRQueue.csproj
 
+      # --no-restore / --no-build を付けず、JsxCore に組み込みの npm パッケージ
+      # 自動インストール(TypeScript 取得)とビューのビルド時コンパイルに任せる
       - name: Build
-        run: dotnet build QRQueue/QRQueue.csproj --configuration Release --no-restore
+        run: dotnet build QRQueue/QRQueue.csproj --configuration Release
 
       - name: Publish
-        run: dotnet publish QRQueue/QRQueue.csproj --configuration Release --no-build --output ./publish-output
+        run: dotnet publish QRQueue/QRQueue.csproj --configuration Release --output ./publish-output
 
-      - name: Setup SSH key
+      # 安全網: ビューがビルド時にコンパイルされていなければサーバーで SSR が壊れるので、
+      # この段階で確実に失敗させる(JSX0001 警告が出ていないかログ併読)
+      - name: Verify views were compiled
         run: |
+          if [ ! -d ./publish-output/obj/JsxCore/js ]; then
+            echo "::error::JsxCore view JS was not produced at build time. Check the Build log for the JSX0001 warning."
+            exit 1
+          fi
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          # Workload Identity Federation: OAuth シークレット無しで認証する
+          # TS_OAUTH_CLIENT_ID / TS_AUDIENCE には Federated Identity の Client ID / Audience を入れる
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          ping: ${{ secrets.DEPLOY_HOST }}
+
+      - name: Setup SSH (key or password)
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          # ssh ラッパーを作る。鍵(DEPLOY_KEY)があれば鍵認証、無ければパスワード(DEPLOY_PASS)認証。
+          # 以降のステップでは ssh の代わりに ./ssh-ci を使う
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+          if [ -n "$DEPLOY_KEY" ]; then
+            printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            cat > ./ssh-ci << 'SCRIPT'
+          #!/usr/bin/env bash
+          exec ssh -i ~/.ssh/deploy_key "$@"
+          SCRIPT
+          elif [ -n "$DEPLOY_PASS" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+            cat > ./ssh-ci << 'SCRIPT'
+          #!/usr/bin/env bash
+          # パスワードをプロセスリストに出さないよう sshpass -e で環境変数経由にする
+          exec env SSHPASS="$DEPLOY_PASS" sshpass -e ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no "$@"
+          SCRIPT
+          else
+            echo "::error::DEPLOY_KEY か DEPLOY_PASS のどちらかを設定してください"
+            exit 1
+          fi
+          chmod +x ./ssh-ci
+          # DEPLOY_HOST は Tailscale 上の宛先(MagicDNS名 or 100.x.x.x)を指定する
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
+          SUDO_PASS: ${{ secrets.SUDO_PASS }}
           APPSETTINGS_JSON: ${{ secrets.APPSETTINGS_JSON }}
         run: |
           DEPLOY_DIR="/var/www/qrqueue/publish"
+          SSH="$PWD/ssh-ci"
 
           echo "Deploying to: $DEPLOY_DIR"
 
-          # サービスファイルをアップロード
-          scp -i ~/.ssh/deploy_key .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
+          # sudo パスワードを設定している場合はそれを sudo に流し込む(sudo -S)。
+          # 未設定なら sudoers の NOPASSWD 前提
+          SUDO_PASS_B64=$(printf '%s' "$SUDO_PASS" | base64 -w 0)
+
+          # 配布先を作成し、中身も含めて全て deploy ユーザー所有にする(冪等)。
+          # -R が要るのは、サービス(root 動作)が起動時コンパイル等で root 所有の
+          # ファイルを作ることがあり、そのままだと rsync --delete の unlink が
+          # Permission denied で code 23 になるため
+          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "SUDO_PASS_B64=${SUDO_PASS_B64} DEPLOY_DIR=${DEPLOY_DIR}" 'bash -s' << 'EOF'
+          if [ -n "$SUDO_PASS_B64" ]; then
+            echo "$SUDO_PASS_B64" | base64 -d | sudo -S -v 2>/dev/null
+          fi
+          sudo mkdir -p "$DEPLOY_DIR"
+          sudo chown -R "$(id -u):$(id -g)" "$DEPLOY_DIR"
+          EOF
+
+          # サービスファイルをアップロード(-S で ssh の代わりにラッパーを使う)
+          scp -S "$SSH" .deploy/qrqueue.service ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/qrqueue.service
 
           # ファイルをアップロード（in-place上書き）
-          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+          # vapid_keys.json はデプロイで消すと既存のPush購読が全滅するため除外
+          # (サーバー側では Vapid:KeysFilePath で配布物の外へ出すのが望ましい)
+          # --no-owner --no-group: CIの一般ユーザーでは所有者/グループの保持(chown/chgrp)が
+          # できず code 23(attr転送失敗)になるため、属性保持をやめて実行ユーザー所有にする
+          rsync -avz --no-owner --no-group --delete --exclude=vapid_keys.json -e "$SSH" \
             ./publish-output/ \
             ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/
 
           # appsettings.json を配置してサービス再起動
           APPSETTINGS_B64=$(echo -n "${APPSETTINGS_JSON}" | base64 -w 0)
 
-          ssh -i ~/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_HOST} "APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
+          "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "SUDO_PASS_B64=${SUDO_PASS_B64} APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'
 
-          # サービスファイルを更新
-          mv /tmp/qrqueue.service /etc/systemd/system/qrqueue.service
-          systemctl daemon-reload
+          # sudo パスワードがあれば -v で認証を済ませておく(NOPASSWD 環境では何もしない)
+          if [ -n "$SUDO_PASS_B64" ]; then
+            echo "$SUDO_PASS_B64" | base64 -d | sudo -S -v 2>/dev/null
+          fi
+
+          # サービスファイルを更新(システム領域なので sudo が要る)
+          sudo mv /tmp/qrqueue.service /etc/systemd/system/qrqueue.service
+          sudo systemctl daemon-reload
 
           DEPLOY_DIR="/var/www/qrqueue/publish"
 
-          # appsettings.json を配置（base64デコード）
+          # appsettings.json を配置（base64デコード。DEPLOY_DIR は chown 済みなので sudo 不要）
           echo "$APPSETTINGS_B64" | base64 -d > $DEPLOY_DIR/appsettings.json
 
           # サービスを再起動
-          systemctl restart qrqueue.service
+          sudo systemctl restart qrqueue.service
 
           echo "Service restarted successfully"
 

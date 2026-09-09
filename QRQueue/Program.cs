@@ -17,9 +17,6 @@ using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
 using JsxCore;
 using JsxCore.Hosting;
-using JsxCore.Mvc;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Http.HttpResults;
 namespace QRQueue
 {
     public class Program
@@ -48,13 +45,19 @@ namespace QRQueue
             builder.Services.AddControllers().AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+                // enum は全 API で文字列化する(GroupStatus など。フロントの TS 型も union 型で一致させる)
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
+            // [ApiController] の自動 400(ProblemDetails)も { message } 形式に統一する
+            builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+                o.InvalidModelStateResponseFactory = ctx => new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                    new Models.API.ApiMessage(string.Join(" ", ctx.ModelState.Values
+                        .SelectMany(v => v.Errors).Select(e => e.ErrorMessage).Where(m => !string.IsNullOrEmpty(m))))));
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
             builder.Services.AddSingleton<IQrCodeGenerator, QrCodeGenerator>();
-            // QR に埋める BaseURL 解決の共通化(設計§8)
+            // QR に埋める BaseURL 解決の共通化(設計書)
             builder.Services.AddSingleton<IBaseUrlResolver, BaseUrlResolver>();
-            builder.Services.AddScoped<ITicketIssuanceService, TicketIssuanceService>();
             builder.Services.AddScoped<IGroupNumberIssuanceService, GroupNumberIssuanceService>();
             builder.Services.AddScoped<IQueueCallService, QueueCallService>();
             builder.Services.AddSingleton<IVapidService, VapidService>();
@@ -73,7 +76,6 @@ namespace QRQueue
             builder.Services.AddScoped<IEventRepository, EventRepository>();
             builder.Services.AddScoped<IParticipationGroupRepository, ParticipationGroupRepository>();
             builder.Services.AddScoped<ITicketRepository, TicketRepository>();
-            builder.Services.AddScoped<IIssueLogRepository, IssueLogRepository>();
 
             // CORS設定: 開発環境は全許可、本番はappsettings.jsonから取得
             builder.Services.AddCors(options =>
@@ -131,7 +133,7 @@ namespace QRQueue
             })
             .AddIdentityCookies();
 
-            // 参加者向け 署名付き participantToken cookie(設計§5.2.1)。既定は Identity のまま別スキーム
+            // 参加者向け 署名付き participantToken cookie(設計書)。既定は Identity のまま別スキーム
             builder.Services.AddAuthentication()
             .AddCookie("Participant", options =>
             {
@@ -173,9 +175,34 @@ namespace QRQueue
 
             var app = builder.Build();
 
+            // デプロイ(サービス再起動)後の一定時間、HTML 応答に Clear-Site-Data: "cache" を付与し、
+            // ブラウザ保持の古いキャッシュ(以前の 1年キャッシュのビュー JS 等)を強制破棄する。
+            // これによりデプロイ直後のアクセスで必ず新しい assets から読み直せる。
+            // 未対応ブラウザではヘッダーが無視されるだけで害はない
+            var appStartedAtUtc = DateTimeOffset.UtcNow;
+            static bool IsDocumentRequest(HttpContext ctx) =>
+                HttpMethods.IsGet(ctx.Request.Method) &&
+                !ctx.Request.Path.StartsWithSegments("/api") &&
+                !ctx.Request.Path.StartsWithSegments("/_jsx") &&
+                (ctx.Request.Headers.Accept.ToString().Contains("text/html") ||
+                 string.IsNullOrEmpty(ctx.Request.Headers.Accept));
+            app.Use(async (context, next) =>
+            {
+                if (DateTimeOffset.UtcNow - appStartedAtUtc < TimeSpan.FromMinutes(10) &&
+                    IsDocumentRequest(context))
+                {
+                    context.Response.Headers["Clear-Site-Data"] = "\"cache\"";
+                }
+                await next();
+            });
+
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+                // 既定の信頼対象は IPv6 ループバックのみ。同一ホストの nginx(127.0.0.1 / ::1)経由の
+                // X-Forwarded-* を反映させないと、QRのBaseURLが http:// になったり
+                // UseHttpsRedirection がリダイレクトループを起こす
+                KnownProxies = { System.Net.IPAddress.Parse("127.0.0.1"), System.Net.IPAddress.IPv6Loopback }
             });
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
@@ -192,7 +219,33 @@ namespace QRQueue
                 app.UseHttpsRedirection();
             }
 
-            app.UseStaticFiles();
+            // 静的ファイル(CSS等)は Cache-Control: no-cache で配信し、毎回鮮度検証させる。
+            // 既定のまま(ヘッダー無し)だとブラウザのヒューリスティックキャッシュにより、
+            // HTMLは新しくてCSSだけ古い状態が発生するため(ETag 付きなので未更新時は 304 で高速)
+            // 静的ファイル(CSS等)のキャッシュは 60 秒に制限する。
+            // 既定(ヘッダー無し)だとヒューリスティックキャッシュで不定期に古くなり、
+            // 1年指定等だとデプロイ後も古いファイルを使い続けて描画が壊れるため
+            const string CacheControl = "public, max-age=60";
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = ctx =>
+                    ctx.Context.Response.Headers.CacheControl = CacheControl
+            });
+            // JsxCore のビュー JS(/_jsx/ 配下)は public, max-age=31536000(1年)で配信されるが、
+            // URL のバージョン識別子がデプロイ間で不変のため、ブラウザが古いビュー JSを使い続け
+            // 「HTML/CSSは新しくて描画だけ古い」状態が起きる。こちらも 60 秒に制限する
+            app.Use(async (context, next) =>
+            {
+                context.Response.OnStarting(() =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/_jsx"))
+                    {
+                        context.Response.Headers.CacheControl = CacheControl;
+                    }
+                    return Task.CompletedTask;
+                });
+                await next();
+            });
             app.UseJsxCore();
             app.UseRouting();
 
@@ -203,40 +256,6 @@ namespace QRQueue
 
             app.MapControllers();
             app.MapHub<QueueHub>("/api/queueHub");
-            // JsxCore View ルーティング(SvelteKit から全面移行)
-            app.MapGet("/", () => Results.Extensions.Jsx("Home/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/initial", () => Results.Extensions.Jsx("Initial/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/login", () => Results.Extensions.Jsx("Login/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/roles", () => Results.Extensions.Jsx("Roles/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/users", () => Results.Extensions.Jsx("Users/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/users/{username}", (string username) => Results.Extensions.Jsx("Users/Detail", new { username }, RenderMode.ServerAndClient));
-            app.MapGet("/admin/delete-data", () => Results.Extensions.Jsx("Admin/DeleteData", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/event", () => Results.Extensions.Jsx("Event/Index", new { }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}", (string eventid) => Results.Extensions.Jsx("Event/Detail", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/publishing", (string eventid) => Results.Extensions.Jsx("Event/Publishing", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/call", (string eventid) => Results.Extensions.Jsx("Event/Call", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/event/{eventid}/queue", (string eventid) => Results.Extensions.Jsx("Event/Queue", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/ticket/{ticketid}", (string ticketid) => Results.Extensions.Jsx("Ticket/Index", new { ticketId = ticketid }, RenderMode.ServerAndClient));
-            // 参加者向け匿名ページ(設計§9.1。/entry/{id} は別担当のため本ブランチでは不作)
-            app.MapGet("/join/{token}", (string token) => Results.Extensions.Jsx("Entry/Join", new { joinToken = token }, RenderMode.ServerAndClient));
-            app.MapGet("/checkin/{eventid}", (string eventid) => Results.Extensions.Jsx("Entry/Checkin", new { eventDisplayId = eventid }, RenderMode.ServerAndClient));
-            // 投影用(旧 /view 置換)
-            app.MapGet("/display/{eventid}", (string eventid) => Results.Extensions.Jsx("Display/Index", new { eventId = eventid }, RenderMode.ServerAndClient));
-            app.MapGet("/entry/{eventid}", async (string eventid, HttpContext http, ITicketRepository tickets) =>
-            {
-                if (Guid.TryParse(eventid, out var eventDisplayId) &&
-                  (await http.AuthenticateAsync("Participant")).Principal is { } principal &&
-                  Guid.TryParse (principal.FindFirstValue("participantToken"), out var participantToken))
-                {
-                    var ticket = await tickets.FindActiveByParticipantTokenAsync(participantToken, eventDisplayId);
-                    if(ticket != null)
-                    {
-                        return Results.Redirect("/ticket/" + ticket.DisplayId.ToString());
-                    }
-                    
-                }
-                return Results.Extensions.Jsx("Entry/Index", new { eventId = eventid }, RenderMode.ServerAndClient);
-            });
             using (var sp = app.Services.CreateScope())
             {
                 var dbContext = sp.ServiceProvider.GetRequiredService<ApplicationDbContext>();

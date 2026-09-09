@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import { readErrorMessage } from "@/Shared/api";
 
 // SvelteKit routes/admin/delete-data/+page.svelte から移行
 export default function DeleteData() {
@@ -38,8 +39,7 @@ export default function DeleteData() {
                     window.location.href = "/login";
                 }, 3000);
             } else {
-                const data = await response.json();
-                setError(data.error || "データ削除に失敗しました。");
+                setError(await readErrorMessage(response));
             }
         } catch (err) {
             setError("通信エラーが発生しました。");
@@ -54,7 +54,7 @@ export default function DeleteData() {
     }
 
     return (
-        <Layout>
+        <Layout title="データ削除 | QRQueue">
             <link rel="stylesheet" href="/css/admin-delete-data.css" />
             <div class="delete-container">
                 <div class="page-title">⚠️ すべてのデータを削除</div>

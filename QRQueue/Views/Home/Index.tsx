@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import type { SendUser } from "@/Shared/api";
 
 // SvelteKit routes/+page.svelte から移行
 export default function Index() {
@@ -10,7 +11,7 @@ export default function Index() {
             try {
                 const res = await fetch("/api/user/MyInfo");
                 if (res.ok) {
-                    const data = await res.json();
+                    const data: SendUser = await res.json();
                     setUserName(data?.userName ?? null);
                 }
             } catch (error) {
@@ -20,7 +21,7 @@ export default function Index() {
     }, []);
 
     return (
-        <Layout>
+        <Layout title="QRQueue">
             {userName !== null && <h1>Welcome {userName}</h1>}
         </Layout>
     );

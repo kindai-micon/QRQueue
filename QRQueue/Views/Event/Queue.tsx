@@ -1,13 +1,13 @@
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
-import { groupStatusLabel, type GroupView, type QueueView } from "@/Shared/queue";
+import { groupStatusLabel, type GroupView, type QueueView } from "@/Shared/api";
 
 type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 管理用キュー一覧(設計§9.1 /event/[eventid]/queue、旧 tickets 画面の置換)。
+// 管理用キュー一覧(設計書 /event/[eventid]/queue、旧 tickets 画面の置換)。
 // 番号・人数・待ち状況の読み取り専用。操作は呼び出しコンソールから。
 export default function Queue({ model }: { model: Model }) {
     const [queue, setQueue] = useState<QueueView | null>(null);
@@ -78,7 +78,7 @@ export default function Queue({ model }: { model: Model }) {
     ];
 
     return (
-        <Layout>
+        <Layout title="キュー一覧 | QRQueue">
             <link rel="stylesheet" href="/css/queue.css" />
             <div class="queue-container">
                 <div class="page-title">キュー一覧</div>
@@ -95,7 +95,7 @@ export default function Queue({ model }: { model: Model }) {
                     </thead>
                     <tbody>
                         {rows.map((g, i) => (
-                            <tr key={`${g.number}-${i}`} class={g.status === 2 ? "queue-row-calling" : ""}>
+                            <tr key={`${g.number}-${i}`} class={g.status === "Calling" ? "queue-row-calling" : ""}>
                                 <td>{g.number}</td>
                                 <td>{g.people}</td>
                                 <td>{groupStatusLabel(g.status)}</td>

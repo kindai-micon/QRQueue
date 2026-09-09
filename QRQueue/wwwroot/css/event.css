@@ -9,15 +9,22 @@
     font-size: 1rem;
 }
 .event-list { display: grid; gap: 1rem; }
-.event-item {
+/* ボタン込みで1枚のカードに収める(ユーザー一覧の .user-item と同じ構造) */
+.event-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 1rem;
     border: 1px solid #ccc;
     border-radius: 0.75rem;
     background: #f9f9f9;
     transition: background 0.2s, box-shadow 0.2s;
+}
+.event-row:hover { background: #e9f5ff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.event-name {
+    flex: 1;
     text-decoration: none;
     color: inherit;
-    display: block;
+    font-weight: 500;
 }
-.event-item:hover { background: #e9f5ff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 .status { margin-top: 1rem; color: gray; }

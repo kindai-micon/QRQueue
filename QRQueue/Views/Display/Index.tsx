@@ -1,13 +1,13 @@
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
-import type { QueueView } from "@/Shared/queue";
+import type { EventInfoView, QueueView } from "@/Shared/api";
 
 type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 投影用画面(設計§9.1 /display/[eventid]、旧 view 置換)。
+// 投影用画面(設計書 /display/[eventid]、旧 view 置換)。
 // 現在呼び出し中を大型表示 + 直近履歴。呼び出し時に強調アニメーションのみ。
 export default function Display({ model }: { model: Model }) {
     const [queue, setQueue] = useState<QueueView | null>(null);
@@ -21,7 +21,7 @@ export default function Display({ model }: { model: Model }) {
             try {
                 const res = await fetch(`/api/entry/${model.eventId}`);
                 if (res.ok) {
-                    const data = await res.json();
+                    const data: EventInfoView = await res.json();
                     setEventName(data.eventName ?? "");
                 }
             } catch {
@@ -100,10 +100,12 @@ export default function Display({ model }: { model: Model }) {
     }, [model.eventId]);
 
     const calling = queue?.callingGroup[0] ?? null;
+    // 次に呼ばれるグループ(サーバー側で番号順に並んでいる)
+    const next = queue?.waitingGroup[0] ?? null;
 
     if (denied) {
         return (
-            <Layout chrome="header">
+            <Layout chrome="header" title="呼び出し表示 | QRQueue">
                 <link rel="stylesheet" href="/css/display.css" />
                 <div class="display-denied">
                     <h1>表示できません</h1>
@@ -117,7 +119,7 @@ export default function Display({ model }: { model: Model }) {
     }
 
     return (
-        <Layout chrome="header">
+        <Layout chrome="header" title="呼び出し表示 | QRQueue">
             <link rel="stylesheet" href="/css/display.css" />
             <div class="display-screen">
                 <div class="display-event">{eventName}</div>
@@ -133,6 +135,14 @@ export default function Display({ model }: { model: Model }) {
                         <div class="display-now-people">{calling.people} 人の方、受付までお越しください</div>
                     )}
                 </div>
+
+                {next && (
+                    <div class="display-next">
+                        <span class="display-next-label">次のグループ</span>
+                        <span class="display-next-number">{next.number} 番</span>
+                        <span class="display-next-people">{next.people} 人</span>
+                    </div>
+                )}
 
                 <div class="display-side">
                     <div class="display-block">
