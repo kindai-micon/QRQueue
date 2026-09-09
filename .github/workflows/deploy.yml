@@ -89,9 +89,6 @@ jobs:
           DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
           SUDO_PASS: ${{ secrets.SUDO_PASS }}
           APPSETTINGS_JSON: ${{ secrets.APPSETTINGS_JSON }}
-          # 初期管理者パスコード(APPSETTINGS_JSON とは別のシークレット項目)。
-          # 未設定なら APPSETTINGS_JSON の内容をそのまま使う
-          INITIAL_ADMIN_PASSCODE: ${{ secrets.INITIAL_ADMIN_PASSCODE }}
           # 設定確認用エンドポイント(/api/diagnostics/settings)のマスターパスワード。
           # こちらも APPSETTINGS_JSON とは別のシークレット項目。未設定なら診断APIは無効のまま
           MASTER_PASSWORD: ${{ secrets.MASTER_PASSWORD }}
@@ -132,14 +129,6 @@ jobs:
             ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/
 
           # appsettings.json を配置してサービス再起動
-          # Actions の別シークレット INITIAL_ADMIN_PASSCODE が設定されていれば、
-          # InitialAdmin:Passcode のみを上書きする(jq はランナー側で実行するため
-          # サーバー側にインストールは不要)。未設定なら APPSETTINGS_JSON をそのまま配置。
-          # パスコードは永続して問題ない値のため、Secrets を更新するまで同じ値が使われる
-          if [ -n "$INITIAL_ADMIN_PASSCODE" ]; then
-            APPSETTINGS_JSON=$(printf '%s' "$APPSETTINGS_JSON" | jq --arg p "$INITIAL_ADMIN_PASSCODE" '.InitialAdmin.Passcode = $p')
-          fi
-          # マスターパスワード(設定確認用エンドポイントの認証)も同様に注入
           if [ -n "$MASTER_PASSWORD" ]; then
             APPSETTINGS_JSON=$(printf '%s' "$APPSETTINGS_JSON" | jq --arg p "$MASTER_PASSWORD" '.Master.Password = $p')
           fi
