@@ -113,7 +113,9 @@ namespace QRQueue.Controllers
                     {
                         EventId = ev.Id,
                         Type = GroupType.Solo,
-                        Status = GroupStatus.Waiting
+                        Status = GroupStatus.Waiting,
+                        // 「1人で参加」は単独での参加を希望しているため同時参加はオフ(issue #72)
+                        AllowCoJoin = false
                     };
                     await groupRepository.AddAsync(group);
                     ticket.ParticipationGroupId = group.Id;
