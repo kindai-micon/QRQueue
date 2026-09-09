@@ -40,6 +40,21 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
 .alert-calling { background-color: #fff3e0; border: 2px solid #ff9800; color: #e65100; }
 .alert-completed { background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; }
 .alert-used { background-color: #eceff1; border: 2px solid #78909c; color: #37474f; }
+
+
+/* === グループ受付取消(issue #67) === */
+.cancel-box {
+    width: 100%; max-width: 450px; box-sizing: border-box;
+    margin-top: 0.5rem; padding: 0.8rem 1rem; border-radius: 12px;
+    background-color: #ffffff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    text-align: center;
+}
+.cancel-group-btn {
+    border: 2px solid #e57373; background: #fff; color: #c62828;
+    padding: 0.6rem 1.2rem; border-radius: 50px; font-weight: 600; cursor: pointer;
+}
+.cancel-group-btn:disabled { opacity: 0.5; cursor: default; }
+.cancel-note { font-size: 0.78rem; color: #888; margin-top: 0.5rem; }
 .alert-sub { font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400; }
 .loading { text-align: center; padding: 3rem 1rem; font-size: 1.1rem; color: #666; }
 .notification-btn {

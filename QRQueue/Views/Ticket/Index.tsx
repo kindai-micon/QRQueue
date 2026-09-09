@@ -17,6 +17,41 @@ export default function Index({ model }: { model: Model }) {
     const [homeHintHidden, setHomeHintHidden] = useState(true);
     const [transferCode, setTransferCode] = useState<string | null>(null);
     const [transferring, setTransferring] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+
+    // グループ全体の受付取消(issue #67)
+    // 呼び出し前の代表者のみ実行でき、確認ダイアログで対象グループ全体が
+    // 取り消されることを明示する。取り消したチケットは再利用できない。
+    async function cancelGroup() {
+        if (!ticketData) return;
+        const confirmed = confirm(
+            `本当にグループの受付を取り消しますか?\n\n` +
+            `・グループのメンバー全員の受付が取り消されます\n` +
+            `・現在のチケットは無効になり、再利用できません\n` +
+            `・再参加する場合は、参加登録から新しいチケットを発行してください`
+        );
+        if (!confirmed || !ticketData.eventId) return;
+
+        setCancelling(true);
+        try {
+            const res = await fetch("/api/entry/group/cancel", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId }),
+            });
+            if (res.ok) {
+                window.location.href = `/entry/${ticketData.eventId}`;
+                return;
+            }
+            const message = await readErrorMessage(res);
+            alert(message || "取り消しに失敗しました");
+        } catch (err) {
+            console.error("受付取消に失敗:", err);
+            alert("通信エラーが発生しました");
+        } finally {
+            setCancelling(false);
+        }
+    }
 
     // 別端末への引き継ぎ(issue #75):
     // 元端末で引き継ぎコードを発行し、新しい端末の /transfer で入力すると
@@ -35,7 +70,7 @@ export default function Index({ model }: { model: Model }) {
                 const data = await res.json();
                 setTransferCode(data.code);
             } else {
-                const message = await res.text();
+            const message = await readErrorMessage(res);
                 alert(message || "引き継ぎコードの発行に失敗しました");
             }
         } catch (err) {
@@ -99,7 +134,7 @@ export default function Index({ model }: { model: Model }) {
                 body: JSON.stringify({ eventDisplayId: ticketData.eventId, allowCoJoin: allow }),
             });
             if (!res.ok) {
-                const message = await res.text();
+            const message = await readErrorMessage(res);
                 alert(message || "変更できませんでした");
                 window.location.reload();
             } else {
@@ -125,7 +160,7 @@ export default function Index({ model }: { model: Model }) {
                 window.location.reload();
                 return;
             }
-            const message = await res.text();
+            const message = await readErrorMessage(res);
             alert(message || "受付を確定できませんでした");
         } catch (err) {
             console.error("受付確定に失敗:", err);
@@ -417,6 +452,23 @@ export default function Index({ model }: { model: Model }) {
                             <div class="heading">ステータス</div>
                             <div class="status-badge">{statusLabel}</div>
                         </div>
+
+                        {/* 受付取消(呼び出し前の代表者のみ、issue #67) */}
+                        {ticketData.isRepresentative && (isWaiting || ticketData.status === "Matching") && (
+                            <div class="cancel-box">
+                                <button
+                                    class="cancel-group-btn"
+                                    onClick={cancelGroup}
+                                    disabled={cancelling}
+                                >
+                                    {cancelling ? "処理中..." : "グループの受付を取り消す"}
+                                </button>
+                                <div class="cancel-note">
+                                    取り消した場合、メンバー全員の受付がキャンセルになり、
+                                    現在のチケットは使えなくなります。再参加は新しいチケットで行います。
+                                </div>
+                            </div>
+                        )}
 
                         {isWaiting && (
                             <div class="queue-info">
