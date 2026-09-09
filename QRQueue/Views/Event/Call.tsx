@@ -183,6 +183,8 @@ export default function Call({ model }: { model: Model }) {
                 </div>
                 <p class="call-hint">
                     「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します。
+                    チェックインしても次のグループは自動で呼び出されないため、前のグループのゲーム終了時に
+                    「次を呼ぶ」で呼び出してください(issue #70)。
                 </p>
 
                 {message && <div class="call-message">{message}</div>}

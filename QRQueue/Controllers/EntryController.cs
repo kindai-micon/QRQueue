@@ -268,11 +268,10 @@ namespace QRQueue.Controllers
                 // 処理対象にする(優先順位1。チェックイン時点での即時告知として実装)
                 await queueCallService.AnnounceAsync(ev, group);
             }
-            else
-            {
-                // 正常キューから呼び出されていたグループのチェックイン完了をトリガーに AutoNext
-                await queueCallService.CallNextAsync(ev);
-            }
+            // issue #70: チェックインを契機とした次グループの自動呼び出し(CallNextAsync)は行わない。
+            // 同時に利用できるゲーム枠が1枠のため、到着確認だけが連鎖して呼び出しが進むと
+            // 受付場所に待機列ができてしまう。次の呼び出しはスタッフが呼び出しコンソールの
+            // 「次を呼ぶ」(PUT /api/call/next/{eventDisplayId})から実行する。
             return new CheckinResult(group.Number, group.Status);
         }
 
