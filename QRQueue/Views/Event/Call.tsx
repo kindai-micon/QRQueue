@@ -115,6 +115,20 @@ export default function Call({ model }: { model: Model }) {
         }
     }
 
+    // スタッフによるグループ単位の操作(優先待機移動・棄権)(issue #73)。
+    // 誤操作防止のため、実行前に確認ダイアログを表示する。
+    async function staffGroupAction(g: GroupView, op: "interrupt" | "forfeit") {
+        if (!g.displayId) return;
+        const label = `${g.number}番(メンバー ${g.people} 人)`;
+        const confirmText = op === "interrupt"
+            ? `${label} を優先待機へ移動しますか?`
+            : `${label} を棄権扱いにして、チケットを無効化しますか?\nこの操作は取り消せません。`;
+        if (!confirm(confirmText)) return;
+
+        action(op, () => fetch(`/api/call/group/${g.displayId}/${op}`, { method: "PUT" }),
+            op === "interrupt" ? "優先待機へ移動しました" : "棄権処理を行いました(チケットを無効化しました)");
+    }
+
     const groupTable = (groups: GroupView[]) => (
         <table class="data-table">
             <thead>
@@ -180,15 +194,86 @@ export default function Call({ model }: { model: Model }) {
                     >
                         🔁 再呼び出し
                     </button>
+                    <button
+                        class="call-done"
+                        disabled={busy}
+                        onClick={() => {
+                            if (confirm("直近にチェックインしたグループのチケットを使用済みにしますか?\nゲーム終了後に押してください。")) {
+                                action("done", () => fetch(`/api/call/done/${model.eventId}`, {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify(null),
+                                }), "ゲーム終了を記録しました(チケットを使用済みにしました)");
+                            }
+                        }}
+                    >
+                        🏁 ゲーム終了
+                    </button>
                 </div>
                 <p class="call-hint">
                     「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します。
+                    チェックインしても次のグループは自動で呼び出されないため、前のグループのゲーム終了時に
+                    「次を呼ぶ」で呼び出してください(issue #70)。
                 </p>
 
                 {message && <div class="call-message">{message}</div>}
                 {error && <div class="call-message call-message-error">{error}</div>}
 
                 <div class="call-panels">
+                    <section class="call-panel">
+                        <h2>ゲーム参加枠の到着状況(issue #69)</h2>
+                        {(queue?.slots?.length ?? 0) === 0 ? (
+                            <p class="call-pool" style={{ fontSize: "0.9rem", color: "#888" }}>処理中の枠はありません</p>
+                        ) : (
+                            queue!.slots!.map((slot) => (
+                                <div class="slot-block" key={slot.slotId}>
+                                    <div class="slot-title">
+                                        {slot.allArrived ? "✅ 全グループ到着済み" : "⏳ 到着確認中"}
+                                        <span class="slot-time">
+                                            {slot.calledAt ? `(${new Date(slot.calledAt).toLocaleTimeString("ja-JP")} 呼び出し)` : ""}
+                                        </span>
+                                    </div>
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr><th>グループ番号</th><th>人数</th><th>到着状態</th><th>操作</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {slot.groups.map((g, i) => (
+                                                <tr key={`${slot.slotId}-${g.number}-${i}`}>
+                                                    <td>{g.number}</td>
+                                                    <td>{g.people}</td>
+                                                    <td>{groupStatusLabel(g.status)}</td>
+                                                    <td>
+                                                        {(g.status === 2 || g.status === 4) && (
+                                                            <button
+                                                                class="btn-secondary btn-sm"
+                                                                disabled={busy}
+                                                                onClick={() => staffGroupAction(g, "interrupt")}
+                                                            >
+                                                                優先待機へ
+                                                            </button>
+                                                        )}
+                                                        {g.status !== 5 && (
+                                                            <button
+                                                                class="btn-danger btn-sm"
+                                                                disabled={busy}
+                                                                onClick={() => staffGroupAction(g, "forfeit")}
+                                                            >
+                                                                棄権
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ))
+                        )}
+                        <p class="call-hint">
+                            未到着グループが一定時間(既定5分)を超えると優先待機へ移動します(QueueCall:SlotTimeoutMinutes で変更可)。
+                        </p>
+                    </section>
                     <section class="call-panel">
                         <h2>現在の呼び出し中</h2>
                         {groupTable(queue?.callingGroup ?? [])}

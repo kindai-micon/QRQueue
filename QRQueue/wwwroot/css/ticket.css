@@ -39,6 +39,22 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
 }
 .alert-calling { background-color: #fff3e0; border: 2px solid #ff9800; color: #e65100; }
 .alert-completed { background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; }
+.alert-used { background-color: #eceff1; border: 2px solid #78909c; color: #37474f; }
+
+
+/* === グループ受付取消(issue #67) === */
+.cancel-box {
+    width: 100%; max-width: 450px; box-sizing: border-box;
+    margin-top: 0.5rem; padding: 0.8rem 1rem; border-radius: 12px;
+    background-color: #ffffff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    text-align: center;
+}
+.cancel-group-btn {
+    border: 2px solid #e57373; background: #fff; color: #c62828;
+    padding: 0.6rem 1.2rem; border-radius: 50px; font-weight: 600; cursor: pointer;
+}
+.cancel-group-btn:disabled { opacity: 0.5; cursor: default; }
+.cancel-note { font-size: 0.78rem; color: #888; margin-top: 0.5rem; }
 .alert-sub { font-size: 0.9rem; margin-top: 0.5rem; font-weight: 400; }
 .loading { text-align: center; padding: 3rem 1rem; font-size: 1.1rem; color: #666; }
 .notification-btn {
@@ -51,7 +67,42 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
 .notification-no-registration { background-color: #9e9e9e; }
 .notification-btn:active { transform: scale(0.95); }
 
-/* === 電子券画面 改造分 === */
+/* === 別端末への引き継ぎ(issue #75) === */
+.transfer-box {
+    width: 100%; max-width: 450px; box-sizing: border-box;
+    margin-top: 0.5rem; padding: 0.8rem 1rem; border-radius: 12px;
+    background-color: #ffffff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    text-align: center;
+}
+.transfer-btn {
+    border: 2px solid #90a4ae; background: #fff; color: #455a64;
+    padding: 0.55rem 1rem; border-radius: 50px; font-weight: 600; cursor: pointer;
+    font-size: 0.9rem;
+}
+.transfer-btn:disabled { opacity: 0.5; cursor: default; }
+.transfer-code {
+    font-size: 2rem; font-weight: 800; letter-spacing: 0.2em;
+    padding: 0.5rem; background: #eceff1; border-radius: 8px; margin: 0.4rem 0;
+}
+.transfer-note { font-size: 0.8rem; color: #777; }
+
+/* === 受付確定フロー(issue #66) === */
+.draft-panel {
+    width: 100%; max-width: 450px; box-sizing: border-box;
+    background-color: #fffde7; border: 2px solid #fdd835; border-radius: 12px;
+    padding: 1rem 1.2rem; margin-bottom: 1rem; text-align: left;
+}
+.draft-members { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.draft-cojoin { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.draft-note { font-size: 0.78rem; color: #777; margin-top: 0.4rem; }
+.confirm-btn {
+    width: 100%; padding: 0.9rem; margin-top: 0.5rem;
+    border: none; border-radius: 12px; background: linear-gradient(135deg, #43a047, #2e7d32);
+    color: white; font-size: 1.1rem; font-weight: 700; cursor: pointer;
+}
+.confirm-btn:active { transform: scale(0.98); }
+
+/* === 電子券画面 改造分(§9.1) === */
 .ticket-number-sub { font-size: 0.85rem; margin-top: 0.6rem; opacity: 0.9; font-weight: 400; }
 
 .queue-info {
@@ -104,4 +155,20 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
 .notification-notice {
     margin-top: 0.6rem; font-size: 0.85rem; color: #b00020;
     text-align: center; width: 100%; max-width: 450px; box-sizing: border-box;
+}
+
+.line-actions {
+    display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+    width: 100%; max-width: 450px; box-sizing: border-box; margin-top: 0.75rem;
+}
+.line-btn {
+    display: block; background-color: #06C755; color: #ffffff;
+    font-size: 0.95rem; font-weight: bold; text-decoration: none;
+    padding: 0.65rem 1.4rem; border-radius: 999px; text-align: center;
+}
+.line-btn:active { transform: scale(0.95); }
+.line-linked-label { font-size: 0.9rem; color: #2e7d32; }
+.line-unlink-btn {
+    border: 1px solid #cfd8dc; background-color: #ffffff; color: #546e7a;
+    font-size: 0.85rem; padding: 0.4rem 0.9rem; border-radius: 999px; cursor: pointer;
 }

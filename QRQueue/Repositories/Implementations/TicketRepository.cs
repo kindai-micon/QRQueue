@@ -45,6 +45,17 @@ namespace QRQueue.Repositories.Implementations
                     || x.ParticipationGroup.Status != GroupStatus.Cancelled));
         }
 
+        public Task<Ticket?> FindActiveByTransferCodeAsync(string transferCodeHash)
+        {
+            return applicationDbContext.Tickets
+                .Include(x => x.ParticipationGroup).ThenInclude(x => x.Event)
+                .FirstOrDefaultAsync(x =>
+                    x.TransferCodeHash == transferCodeHash
+                    && x.TransferCodeExpiresAt != null
+                    && x.TransferCodeExpiresAt > DateTimeOffset.UtcNow
+                    && x.Status == TicketStatus.Registered);
+        }
+
         public async Task AddAsync(Ticket ticket)
         {
             await applicationDbContext.Tickets.AddAsync(ticket);

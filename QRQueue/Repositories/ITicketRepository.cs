@@ -24,6 +24,12 @@ namespace QRQueue.Repositories
         /// </summary>
         Task<bool> HasActiveTicketAsync(Guid participantToken);
 
+        /// <summary>
+        /// 引き継ぎコードのハッシュに一致する有効なチケットを取得(issue #75)。
+        /// 未期限かつ使用済み(ハッシュ未クリア)のコードにのみ一致する。
+        /// </summary>
+        Task<Ticket?> FindActiveByTransferCodeAsync(string transferCodeHash);
+
         /// <summary>イベントのチケット一覧(番号順)</summary>
         Task<List<Ticket>> GetByEventAsync(Guid eventId);
 

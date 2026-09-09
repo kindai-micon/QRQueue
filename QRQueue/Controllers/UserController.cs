@@ -136,13 +136,9 @@ namespace QRQueue.Controllers
             }
             return Ok();
         }
-        [HttpGet(nameof(GetPasscode))]
-        public ActionResult<PasscodeView> GetPasscode()
-        {
-            var passcode = passcodeService.GetPasscode();
-            Console.WriteLine("passcode:" + passcode);
-            return new PasscodeView(passcode);
-        }
+        // issue #77: 初期登録用パスコードを返すAPIは廃止した。
+        // パスコードはサーバーコンソールへ出力されるか、
+        // デプロイ時に InitialAdmin:Passcode 設定として提供される(IPasscodeService を参照)。
 
         [HttpPost(nameof(InitialRegister))]
         public async Task<IActionResult> InitialRegister(InitialUser initialUser)
@@ -188,6 +184,63 @@ namespace QRQueue.Controllers
                 return BadRequest(new ApiMessage("Passcodeが異なります"));
             }
         }
+        /// <summary>
+        /// 管理者によるパスワードリセット(issue #83)。
+        /// Identity のリセットトークン経由でパスワードハッシュを1回の更新で置き換えるため、
+        /// 処理は原子的に行われる。新しいパスワードの設定に失敗した場合、
+        /// 既存のパスワードハッシュは変更されないため、元のパスワードで引き続きログインできる。
+        /// 応答・ログにパスワードや秘密情報を含めない。
+        /// 対象が Admin ロール保有者の場合は、呼び出し元も Admin ロール保有者である必要がある
+        /// (UserManagement 権限を持つロールによる Admin アカウント乗っ取り=権限昇格を防ぐ)。
+        /// </summary>
+        [Authorize(Policy = "UserView")]
+        [Authorize(Policy = "UserManagement")]
+        [HttpPost(nameof(ResetPassword))]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordModel resetPasswordModel)
+        {
+            if (resetPasswordModel.NewPassword != resetPasswordModel.ConfirmPassword)
+            {
+                return BadRequest(new ApiMessage("新しいパスワードが一致しません"));
+            }
+            var user = await userManager.FindByNameAsync(resetPasswordModel.UserName);
+            if (user == null)
+            {
+                return NotFound(new ApiMessage("ユーザーが見つかりません"));
+            }
+
+            // Admin ロール保有者を対象とする場合は Admin のみに許可(権限昇格対策)
+            if (await userManager.IsInRoleAsync(user, "Admin"))
+            {
+                var caller = await userManager.GetUserAsync(User);
+                if (caller == null || !await userManager.IsInRoleAsync(caller, "Admin"))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden,
+                        new ApiMessage("Adminロール保有者のパスワード変更にはAdmin権限が必要です"));
+                }
+            }
+
+            // ResetPasswordAsync は内部的に PasswordHash を単一の Update で置き換えるため、
+            // 「削除してから追加」のような中間状態(どちらのパスワードでもログインできない状態)が発生しない
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await userManager.ResetPasswordAsync(user, resetToken, resetPasswordModel.NewPassword);
+            if (!result.Succeeded)
+            {
+                // 失敗時も既存パスワードは保持される。エラー内容(検証規則違反など)のみを返す
+                return BadRequest(result.Errors.ToApiMessage());
+            }
+
+            // セキュリティスタンプは ResetPasswordAsync 内で更新される。
+            // 既存セッション(当該ユーザーの cookie)は SecurityStampValidator の検証タイミング
+            // (既定30分間隔)で無効化されるため、即時には失効しない点に注意。
+            // 自分自身のパスワードを変更した場合は SecurityStamp 更新後もセッションを維持する
+            var my = await userManager.GetUserAsync(User);
+            if (my?.Id == user.Id)
+            {
+                await signInManager.RefreshSignInAsync(my);
+            }
+            return Ok();
+        }
+
         [HttpGet(nameof(HasUser))]
         public async Task<ActionResult<bool>> HasUser()
         {
@@ -222,40 +275,6 @@ namespace QRQueue.Controllers
             }
             // SecurityStamp 更新後もセッションを維持するため Cookie を再発行する
             await signInManager.RefreshSignInAsync(user);
-            return Ok();
-        }
-
-        /// <summary>管理者(UserManagement 権限)による他ユーザーのパスワード再設定。現在のパスワードは不要</summary>
-        [Authorize(Policy = "UserView")]
-        [Authorize(Policy = "UserManagement")]
-        [HttpPost(nameof(ResetPassword))]
-        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordModel model)
-        {
-            if (model.NewPassword != model.ConfirmPassword)
-            {
-                return BadRequest(new ApiMessage("新しいパスワードが一致しません"));
-            }
-            var user = await userManager.FindByNameAsync(model.UserName);
-            if (user == null)
-            {
-                return NotFound(new ApiMessage("ユーザーが見つかりません"));
-            }
-            var result = await userManager.RemovePasswordAsync(user);
-            if (!result.Succeeded)
-            {
-                return BadRequest(result.Errors.ToApiMessage());
-            }
-            result = await userManager.AddPasswordAsync(user, model.NewPassword);
-            if (!result.Succeeded)
-            {
-                return BadRequest(result.Errors.ToApiMessage());
-            }
-            // 自分自身のパスワードを変更した場合は SecurityStamp 更新後もセッションを維持する
-            var my = await userManager.GetUserAsync(User);
-            if (my?.Id == user.Id)
-            {
-                await signInManager.RefreshSignInAsync(my);
-            }
             return Ok();
         }
 

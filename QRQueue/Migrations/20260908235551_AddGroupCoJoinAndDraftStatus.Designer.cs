@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QRQueue;
@@ -11,9 +12,11 @@ using QRQueue;
 namespace QRQueue.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260908235551_AddGroupCoJoinAndDraftStatus")]
+    partial class AddGroupCoJoinAndDraftStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -342,9 +345,6 @@ namespace QRQueue.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("GameSlotId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("JoinToken")
                         .HasColumnType("text");
 
@@ -443,9 +443,6 @@ namespace QRQueue.Migrations
                     b.Property<Guid>("DisplayId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("LineUserId")
-                        .HasColumnType("text");
-
                     b.Property<long>("Number")
                         .HasColumnType("bigint");
 
@@ -458,20 +455,12 @@ namespace QRQueue.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("TransferCodeExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TransferCodeHash")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("Updated")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ParticipationGroupId");
-
-                    b.HasIndex("TransferCodeHash");
 
                     b.ToTable("Tickets");
                 });
@@ -604,8 +593,7 @@ namespace QRQueue.Migrations
                 {
                     b.HasOne("QRQueue.Models.ParticipationGroup", "ParticipationGroup")
                         .WithMany("Tickets")
-                        .HasForeignKey("ParticipationGroupId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .HasForeignKey("ParticipationGroupId");
 
                     b.Navigation("ParticipationGroup");
                 });

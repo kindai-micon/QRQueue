@@ -89,6 +89,9 @@ jobs:
           DEPLOY_PASS: ${{ secrets.DEPLOY_PASS }}
           SUDO_PASS: ${{ secrets.SUDO_PASS }}
           APPSETTINGS_JSON: ${{ secrets.APPSETTINGS_JSON }}
+          # 設定確認用エンドポイント(/api/diagnostics/settings)のマスターパスワード。
+          # こちらも APPSETTINGS_JSON とは別のシークレット項目。未設定なら診断APIは無効のまま
+          MASTER_PASSWORD: ${{ secrets.MASTER_PASSWORD }}
         run: |
           DEPLOY_DIR="/var/www/qrqueue/publish"
           SSH="$PWD/ssh-ci"
@@ -117,13 +120,18 @@ jobs:
           # ファイルをアップロード（in-place上書き）
           # vapid_keys.json はデプロイで消すと既存のPush購読が全滅するため除外
           # (サーバー側では Vapid:KeysFilePath で配布物の外へ出すのが望ましい)
+          # checkin_secret.json も受付QRの到着確認コードを導出する秘密鍵の自動生成ファイル。
+          # これが消えると印刷済みの受付QRが全て無効化されるため除外
           # --no-owner --no-group: CIの一般ユーザーでは所有者/グループの保持(chown/chgrp)が
           # できず code 23(attr転送失敗)になるため、属性保持をやめて実行ユーザー所有にする
-          rsync -avz --no-owner --no-group --delete --exclude=vapid_keys.json -e "$SSH" \
+          rsync -avz --no-owner --no-group --delete --exclude=vapid_keys.json --exclude=checkin_secret.json -e "$SSH" \
             ./publish-output/ \
             ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/
 
           # appsettings.json を配置してサービス再起動
+          if [ -n "$MASTER_PASSWORD" ]; then
+            APPSETTINGS_JSON=$(printf '%s' "$APPSETTINGS_JSON" | jq --arg p "$MASTER_PASSWORD" '.Master.Password = $p')
+          fi
           APPSETTINGS_B64=$(echo -n "${APPSETTINGS_JSON}" | base64 -w 0)
 
           "$SSH" ${DEPLOY_USER}@${DEPLOY_HOST} "SUDO_PASS_B64=${SUDO_PASS_B64} APPSETTINGS_B64=${APPSETTINGS_B64}" 'bash -s' << 'EOF'

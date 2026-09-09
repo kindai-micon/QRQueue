@@ -6,7 +6,8 @@ type Model = {
     eventDisplayId: string;
 };
 
-// チェックインQRの飛び先(設計書 /checkin/[eventid])。
+// チェックインQRの飛び先(設計§9.1 /checkin/[eventid] §4.6)。
+// 受付に掲示された確認用QR(到着確認コード rc 付きURL)からのみ開かれる(issue #68)。
 // 参加者cookie を添えて POST /api/entry/checkin を呼ぶ。
 // 失敗時は「まだ確定できません」を表示し、グループの状態は一切変化しない。
 export default function Checkin({ model }: { model: Model }) {
@@ -16,6 +17,9 @@ export default function Checkin({ model }: { model: Model }) {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [ticketUrl, setTicketUrl] = useState<string | null>(null);
+
+    // 受付掲示QRに埋め込まれた到着確認コード(issue #68)
+    const receptionCode = new URLSearchParams(window.location.search).get("rc");
 
     useEffect(() => {
         (async () => {
@@ -41,7 +45,10 @@ export default function Checkin({ model }: { model: Model }) {
             const res = await fetch("/api/entry/checkin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ eventDisplayId: model.eventDisplayId }),
+                body: JSON.stringify({
+                    eventDisplayId: model.eventDisplayId,
+                    receptionCode: receptionCode,
+                }),
             });
             if (res.ok) {
                 const data: CheckinResult = await res.json();
@@ -90,23 +97,34 @@ export default function Checkin({ model }: { model: Model }) {
                     <div class="checkin-card">
                         <div class="checkin-kind">チェックイン</div>
                         <h1 class="checkin-event">{ev.eventName}</h1>
-                        <p class="checkin-desc">
-                            メンバーがそろった代表者の方は、下のボタンで受付を確定してください。
-                        </p>
-
-                        {error && (
+                        {!receptionCode && (
                             <div class="checkin-error">
-                                <h2>まだ確定できません</h2>
-                                <p>{error}</p>
+                                <h2>受付の確認用QRから開いてください</h2>
+                                <p>
+                                    到着確認は、受付に掲示された確認用QRコードを読み取って開いた場合にのみ行えます。
+                                </p>
                             </div>
                         )}
+                        {receptionCode && (
+                            <>
+                                <p class="checkin-desc">
+                                    メンバーがそろった代表者の方は、下のボタンで受付を確定してください。
+                                </p>
+                                {error && (
+                                    <div class="checkin-error">
+                                        <h2>まだ確定できません</h2>
+                                        <p>{error}</p>
+                                    </div>
+                                )}
 
-                        <button class="checkin-btn" onClick={checkin} disabled={busy}>
-                            {busy ? "送信中..." : "受付に到着したことを伝える"}
-                        </button>
-                        <p class="checkin-note">
-                            この操作は呼び出されているグループの代表者本人にのみ有効です。
-                        </p>
+                                <button class="checkin-btn" onClick={checkin} disabled={busy}>
+                                    {busy ? "送信中..." : "受付に到着したことを伝える"}
+                                </button>
+                                <p class="checkin-note">
+                                    この操作は呼び出されているグループの代表者本人にのみ有効です。
+                                </p>
+                            </>
+                        )}
                     </div>
                 )}
 

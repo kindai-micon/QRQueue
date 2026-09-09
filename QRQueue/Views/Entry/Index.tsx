@@ -1,9 +1,17 @@
 import Layout from "@/Shared/Layout";
 import { useState, useEffect } from "preact/hooks";
+import type { HubConnection } from "@microsoft/signalr";
 import { readErrorMessage, type ApiMessage, type EventInfoView, type JoinConflict, type JoinResult, type RestoreResult } from "@/Shared/api";
 
 type Model = {
     eventId: string;
+};
+
+// 受付状態の表示ラベル(issue #65)
+const STATUS_LABELS: Record<string, string> = {
+    Preparing: "受付開始前",
+    Open: "受付中",
+    Closed: "受付終了",
 };
 
 export default function Index({ model }: { model: Model }) {
@@ -19,6 +27,10 @@ export default function Index({ model }: { model: Model }) {
     const [busyMode, setBusyMode] = useState<string | null>(null);                  //処理中の参加方法（ボタンの二重押下防止）.
 
     useEffect(() => {
+        let disposed = false;
+        let connection: HubConnection | null = null;
+        let poll: number | undefined;
+
         async function loadEventInfo() {
             try {
                 const response = await fetch(`/api/entry/${model.eventId}`);
@@ -27,15 +39,51 @@ export default function Index({ model }: { model: Model }) {
                     return;
                 }
                 const data: EventInfoView = await response.json();
-
-                setEventInfo(data);
+                if (!disposed) {
+                    setEventInfo(data);
+                    setLoadError(null);
+                }
             } catch (err) {
                 console.error("イベント情報の取得に失敗:", err);
-                setLoadError("通信エラーが発生しました");
+                if (!disposed) setLoadError("通信エラーが発生しました");
             }
         }
 
         loadEventInfo();
+
+        (async () => {
+            try {
+                // 受付開始・終了を参加登録画面に自動反映する(issue #65)
+                const { HubConnectionBuilder, HttpTransportType } = await import("@microsoft/signalr");
+                connection = new HubConnectionBuilder()
+                    .withUrl("/api/queueHub", { skipNegotiation: true, transport: HttpTransportType.WebSockets })
+                    .withAutomaticReconnect()
+                    .build();
+                connection.on("UpdateStatus", loadEventInfo);
+                connection.onreconnected(async () => {
+                    await connection?.invoke("SetEvent", model.eventId);
+                    await loadEventInfo();
+                });
+                await connection.start();
+                if (disposed) {
+                    await connection.stop();
+                    return;
+                }
+                await connection.invoke("SetEvent", model.eventId);
+            } catch (err) {
+                console.error("SignalR connection setup error:", err);
+            }
+            // 通知を取りこぼした場合のバックストップ(15秒ごとに再取得)
+            if (!disposed) {
+                poll = window.setInterval(loadEventInfo, 15000);
+            }
+        })();
+
+        return () => {
+            disposed = true;
+            if (poll) window.clearInterval(poll);
+            connection?.stop().catch(() => { /* ignore */ });
+        };
     }, [model.eventId]);
 
     async function handleJoin(mode: string) {
@@ -114,13 +162,8 @@ export default function Index({ model }: { model: Model }) {
 
             const data: JoinResult = await response.json();
 
-            if (mode === "group-create") {
-                setJoinToken(data.joinToken ?? null);
-                setGroupNumber(data.groupNumber);
-                setCreatedTicketId(data.ticketDisplayId);
-                return;
-            }
-
+            // 受付確定(メンバー追加・人数・同時参加可否の変更)は電子券画面で行う(issue #66)。
+            // group-create の場合も代表者はまず電子券画面へ遷移する。
             window.location.href = `/ticket/${data.ticketDisplayId}`;
         } catch (err) {
             console.error("参加登録(上書き)に失敗:", err);
@@ -144,6 +187,15 @@ export default function Index({ model }: { model: Model }) {
                         {eventInfo?.eventName ?? (loadError ? "イベント" : "読み込み中...")}
                     </h1>
                     <p class="entry-event-id">イベントID: {model.eventId}</p>
+
+                    {eventInfo && (
+                        <p class="entry-status">
+                            受付状態:{" "}
+                            <strong style={{ color: eventInfo.isOpen ? "green" : "#c62828" }}>
+                                {STATUS_LABELS[eventInfo.status] ?? eventInfo.status}
+                            </strong>
+                        </p>
+                    )}
 
                     {loadError && (
                         <div class="entry-error">{loadError}</div>
@@ -247,6 +299,18 @@ export default function Index({ model }: { model: Model }) {
                     )}
                 </div>
             </div>
+         )}
+
+            {eventInfo && !eventInfo.isOpen && (
+                <p>現在、受付を行っていません。</p>
+            )}
+
+            <p style={{ fontSize: "0.85rem" }}>
+                別の端末から引き継ぐ(引き継ぎコードをお持ちの方は)
+                <a href="/transfer">こちら</a>
+            </p>
+
+        </div>
         </Layout>
     );
 }

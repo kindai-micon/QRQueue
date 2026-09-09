@@ -366,3 +366,6 @@ FodyWeavers.xsd
 vapid_keys.json
 # Claude Code worktrees
 .claude/
+
+# 作業用一時ファイル
+.tmp-*

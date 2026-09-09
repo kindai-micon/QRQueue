@@ -19,10 +19,9 @@ export default function Index() {
                     const hasUser: boolean = await response.json();
                     if (hasUser) {
                         window.location.href = "/login";
-                    } else {
-                        // パスコードをバックエンドのコンソールに出力
-                        await fetch("/api/user/GetPasscode");
                     }
+                    // issue #77: パスコード取得APIは廃止。
+                    // パスコードはサーバーコンソール(初回リクエスト時出力)またはデプロイ時設定から入手する。
                 }
             } catch (err) {
                 console.error(err);
@@ -71,6 +70,10 @@ export default function Index() {
             <link rel="stylesheet" href="/css/initial.css" />
             <div class="form-container">
                 <h1>初期ユーザー作成</h1>
+                <p class="passcode-hint">
+                    作成用パスコードは、サーバーコンソールに出力された値(未設定の場合、初回アクセス時に生成・出力されます)、または
+                    デプロイ時に設定した <code>InitialAdmin:Passcode</code> の値を入力してください。
+                </p>
                 <form onSubmit={handleSubmit}>
                     <div class="form-group">
                         <label for="passcode" class="required-mark">作成用パスコード</label>

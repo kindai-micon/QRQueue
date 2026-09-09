@@ -96,6 +96,8 @@ export default function Detail({ model }: { model: Model }) {
     }
 
     // 管理者によるパスワード再設定(現在のパスワードは不要)
+    // パスワードリセット(issue #83): サーバー側は原子的に処理され、
+    // 失敗時も既存パスワードが保持されるため、ユーザーがログインできなくなることはない
     async function resetPasswordSubmit(e: Event) {
         e.preventDefault();
         if (!user) return;

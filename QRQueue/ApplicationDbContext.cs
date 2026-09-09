@@ -33,6 +33,10 @@ namespace QRQueue
                 .WithMany(g => g.Tickets)
                 .HasForeignKey(t => t.ParticipationGroupId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // 引き継ぎコードの照合(complete時の頻用パス)をインデックスで高速化
+            modelBuilder.Entity<Ticket>()
+                .HasIndex(t => t.TransferCodeHash);
         }
     }
 }

@@ -14,7 +14,73 @@ export default function Index({ model }: { model: Model }) {
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
+    const [lineLinked, setLineLinked] = useState(false);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
+    const [transferCode, setTransferCode] = useState<string | null>(null);
+    const [transferring, setTransferring] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+
+    // グループ全体の受付取消(issue #67)
+    // 呼び出し前の代表者のみ実行でき、確認ダイアログで対象グループ全体が
+    // 取り消されることを明示する。取り消したチケットは再利用できない。
+    async function cancelGroup() {
+        if (!ticketData) return;
+        const confirmed = confirm(
+            `本当にグループの受付を取り消しますか?\n\n` +
+            `・グループのメンバー全員の受付が取り消されます\n` +
+            `・現在のチケットは無効になり、再利用できません\n` +
+            `・再参加する場合は、参加登録から新しいチケットを発行してください`
+        );
+        if (!confirmed || !ticketData.eventId) return;
+
+        setCancelling(true);
+        try {
+            const res = await fetch("/api/entry/group/cancel", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId }),
+            });
+            if (res.ok) {
+                window.location.href = `/entry/${ticketData.eventId}`;
+                return;
+            }
+            const message = await readErrorMessage(res);
+            alert(message || "取り消しに失敗しました");
+        } catch (err) {
+            console.error("受付取消に失敗:", err);
+            alert("通信エラーが発生しました");
+        } finally {
+            setCancelling(false);
+        }
+    }
+
+    // 別端末への引き継ぎ(issue #75):
+    // 元端末で引き継ぎコードを発行し、新しい端末の /transfer で入力すると
+    // チケットが新しい端末へ移る(元端末では以後使用できない)
+    async function startTransfer() {
+        if (!ticketData?.eventId) return;
+        if (!confirm("別の端末へ引き継ぐためのコードを発行しますか?\n引き継ぎ後は、この端末ではこのチケットを使用できなくなります。")) return;
+        setTransferring(true);
+        try {
+            const res = await fetch("/api/entry/transfer/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTransferCode(data.code);
+            } else {
+            const message = await readErrorMessage(res);
+                alert(message || "引き継ぎコードの発行に失敗しました");
+            }
+        } catch (err) {
+            console.error("引き継ぎコードの発行に失敗:", err);
+            alert("通信エラーが発生しました");
+        } finally {
+            setTransferring(false);
+        }
+    }
 
     // 「ホーム画面に追加」導線:  standalone で開いていないときだけ案内
     useEffect(() => {
@@ -27,6 +93,11 @@ export default function Index({ model }: { model: Model }) {
     }, []);
 
     useEffect(() => {
+        // LINE連携のコールバックで戻ってきた場合の完了表示(URLからはパラメータを消しておく)
+        if (new URLSearchParams(window.location.search).get("line") === "linked") {
+            setNotice("LINE連携が完了しました。順番が来るとLINEにも通知が届きます");
+            window.history.replaceState(null, "", window.location.pathname);
+        }
         try {
             const stored = localStorage.getItem("notifications");
             const list: string[] = stored ? JSON.parse(stored) : [];
@@ -53,6 +124,54 @@ export default function Index({ model }: { model: Model }) {
         }
         const data: VapidPublicKeyView = await res.json();
         return data.publicKey;
+    }
+
+    // ===== 受付確定フロー(issue #66) =====
+    const isDraft = ticketData?.status === "Draft";
+    const draftMemberCount = ticketData?.memberCount ?? 1;
+
+    // 同時参加可否の変更(受付確定前のみ、3人では変更不可)
+    async function setCoJoin(allow: boolean) {
+        if (!ticketData?.eventId) return;
+        try {
+            const res = await fetch("/api/entry/group/cojoin", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId, allowCoJoin: allow }),
+            });
+            if (!res.ok) {
+            const message = await readErrorMessage(res);
+                alert(message || "変更できませんでした");
+                window.location.reload();
+            } else {
+                window.location.reload();
+            }
+        } catch (err) {
+            console.error("同時参加可否の変更に失敗:", err);
+            alert("通信エラーが発生しました");
+        }
+    }
+
+    // 受付確定: 代表者が「受付」を押すと呼び出し番号が採番され、待機キューに追加される
+    async function confirmGroup() {
+        if (!ticketData?.eventId) return;
+        if (!confirm("受付を確定しますか?\n確定後は人数と同時参加可否を変更できません。")) return;
+        try {
+            const res = await fetch("/api/entry/group/confirm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventDisplayId: ticketData.eventId }),
+            });
+            if (res.ok) {
+                window.location.reload();
+                return;
+            }
+            const message = await readErrorMessage(res);
+            alert(message || "受付を確定できませんでした");
+        } catch (err) {
+            console.error("受付確定に失敗:", err);
+            alert("通信エラーが発生しました");
+        }
     }
 
     function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -192,6 +311,21 @@ export default function Index({ model }: { model: Model }) {
         }
     }
 
+    // LINE連携の解除
+    async function unlinkLine() {
+        try {
+            const res = await fetch(`/api/line/unlink/${model.ticketId}`, { method: "POST" });
+            if (!res.ok) {
+                console.error("LINE連携の解除に失敗:", res.status, await readErrorMessage(res));
+                return;
+            }
+            setLineLinked(false);
+            setNotice("LINE連携を解除しました");
+        } catch (error) {
+            console.error("LINE連携の解除に失敗:", error);
+        }
+    }
+
     useEffect(() => {
         let connection: HubConnection | null = null;
         let disposed = false;
@@ -210,6 +344,7 @@ export default function Index({ model }: { model: Model }) {
                 const data: TicketView = await res.json();
                 if (disposed) return;
                 setTicketData(data);
+                setLineLinked(data.lineLinked ?? false);
 
                 // チケットのイベントが確定したら SignalR グループへ参加
                 if (data.eventId && data.eventId !== joinedEventId && connection?.state === "Connected") {
@@ -291,6 +426,19 @@ export default function Index({ model }: { model: Model }) {
                             </button>
                         </div>
                         {notice && <div class="notification-notice">{notice}</div>}
+
+                        <div class="line-actions">
+                            {lineLinked ? (
+                                <>
+                                    <div class="line-linked-label">LINE通知 連携済み</div>
+                                    <button class="line-unlink-btn" onClick={unlinkLine}>解除</button>
+                                </>
+                            ) : (
+                                <a class="line-btn" href={`/api/line/authorize/${model.ticketId}`}>
+                                    LINEで通知を受け取る
+                                </a>
+                            )}
+                        </div>
                         <div class="header">
                             <h1>{ticketData.eventName ?? "電子券"}</h1>
                             <p>あなたの参加証(この画面が唯一の参加証です)</p>
@@ -302,12 +450,60 @@ export default function Index({ model }: { model: Model }) {
                             {ticketData.status === "Matching" && (
                                 <div class="ticket-number-sub">グループが揃い次第、番号が確定します</div>
                             )}
+                            {isDraft && (
+                                <div class="ticket-number-sub">「受付」を押すと番号が確定します</div>
+                            )}
                         </div>
+
+                        {/* 受付確定パネル(代表者・受付確定前のみ、issue #66) */}
+                        {isDraft && ticketData.isRepresentative && (
+                            <div class="draft-panel">
+                                <div class="draft-members">
+                                    現在の人数: <strong>{draftMemberCount}</strong> / 3 人
+                                </div>
+                                <label class="draft-cojoin">
+                                    <input
+                                        type="checkbox"
+                                        checked={ticketData.allowCoJoin === true}
+                                        disabled={draftMemberCount >= 3}
+                                        onChange={(e) => setCoJoin(e.currentTarget.checked)}
+                                    />
+                                    他のグループと一緒に参加してもよい(3人未満の場合のみ)
+                                </label>
+                                {draftMemberCount >= 3 && (
+                                    <div class="draft-note">3人に達したため、同時参加はオフで固定です。</div>
+                                )}
+                                <button class="confirm-btn" onClick={confirmGroup}>
+                                    ✅ 受付を確定する
+                                </button>
+                                <div class="draft-note">
+                                    受付を確定するまで呼び出されることはありません。
+                                    確定後は人数・同時参加可否を変更できません。
+                                </div>
+                            </div>
+                        )}
 
                         <div class="ticket-info">
                             <div class="heading">ステータス</div>
                             <div class="status-badge">{statusLabel}</div>
                         </div>
+
+                        {/* 受付取消(呼び出し前の代表者のみ、issue #67) */}
+                        {ticketData.isRepresentative && (isWaiting || ticketData.status === "Matching") && (
+                            <div class="cancel-box">
+                                <button
+                                    class="cancel-group-btn"
+                                    onClick={cancelGroup}
+                                    disabled={cancelling}
+                                >
+                                    {cancelling ? "処理中..." : "グループの受付を取り消す"}
+                                </button>
+                                <div class="cancel-note">
+                                    取り消した場合、メンバー全員の受付がキャンセルになり、
+                                    現在のチケットは使えなくなります。再参加は新しいチケットで行います。
+                                </div>
+                            </div>
+                        )}
 
                         {isWaiting && (
                             <div class="queue-info">
@@ -331,13 +527,9 @@ export default function Index({ model }: { model: Model }) {
                                 <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>🔔</div>
                                 <div>呼び出されました！</div>
                                 <div class="alert-sub">
-                                    メンバーがそろうと受付のチェックインQRを読み取ってください。
+                                    受付に掲示された<strong>チェックインQR</strong>を読み取って、
+                                    到着を確認してください(issue #68: 電子券画面からは直接チェックインできません)。
                                 </div>
-                                {ticketData.eventId && (
-                                    <a class="alert-link" href={`/checkin/${ticketData.eventId}`}>
-                                        チェックイン画面へ(受付掲示QRの代わりにここからでも可)
-                                    </a>
-                                )}
                             </div>
                         )}
                         {isCalling && !ticketData.isRepresentative && (
@@ -356,19 +548,25 @@ export default function Index({ model }: { model: Model }) {
                                     メンバーがそろったら代表者が受付のチェックインQRを読み取ると、
                                     次の呼び出しに<strong>割り込んで</strong>優先的に処理されます。
                                 </div>
-                                {ticketData.eventId && ticketData.isRepresentative && (
-                                    <a class="alert-link" href={`/checkin/${ticketData.eventId}`}>
-                                        チェックイン画面へ
-                                    </a>
-                                )}
                             </div>
                         )}
 
-                        {ticketData.status === "Completed" && (
+                        {ticketData.status === "Completed" && !ticketData.used && (
                             <div class="alert-box alert-completed">
                                 <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>✓</div>
                                 <div>受付完了</div>
                                 <div class="alert-sub">受付が完了しました</div>
+                            </div>
+                        )}
+
+                        {ticketData.used && (
+                            <div class="alert-box alert-used">
+                                <div style={{ fontSize: "1.3rem", marginBottom: "0.5rem" }}>🏁</div>
+                                <div>使用済み</div>
+                                <div class="alert-sub">
+                                    このチケットのゲーム参加は終了しました。
+                                    同じイベントに再度参加する場合は、参加登録から新しいチケットを発行してください。
+                                </div>
                             </div>
                         )}
 
@@ -384,6 +582,28 @@ export default function Index({ model }: { model: Model }) {
                                     width={260}
                                     height={260}
                                 />
+                            </div>
+                        )}
+
+                        {transferCode ? (
+                            <div class="transfer-box">
+                                <div class="heading">引き継ぎコード</div>
+                                <div class="transfer-code">{transferCode}</div>
+                                <p class="transfer-note">
+                                    新しい端末で <strong>/transfer</strong> を開き、このコードを入力してください。
+                                    <br />有効期限は10分・1回のみ使用できます。
+                                    <br />引き継ぎ後、この端末ではチケットを表示できなくなります。
+                                </p>
+                            </div>
+                        ) : (
+                            <div class="transfer-box">
+                                <button
+                                    class="transfer-btn"
+                                    onClick={startTransfer}
+                                    disabled={transferring}
+                                >
+                                    {transferring ? "発行中..." : "📱 別の端末へ引き継ぐ"}
+                                </button>
                             </div>
                         )}
 

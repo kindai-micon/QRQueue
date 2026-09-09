@@ -75,8 +75,11 @@ export default function Publishing({ model }: { model: Model }) {
                     <section class="publishing-card">
                         <h2>チェックインQR</h2>
                         <p class="publishing-desc">
-                            受付に掲示。呼び出されたグループの<strong>代表者</strong>が読むと受付が確定し、
-                            次の呼び出しが自動で進みます。
+                            受付に掲示。呼び出されたグループの<strong>代表者</strong>が読み取ると受付が確定します。
+                            このQRには<strong>到着確認コード</strong>が含まれており、受付掲示QRからのみ
+                            チェックインが完了します(issue #68)。
+                            チェックインしても次のグループは自動で呼び出されません。次の呼び出しは
+                            呼び出しコンソールの「次を呼ぶ」から行ってください(issue #70)。
                         </p>
                         <button
                             class="btn-primary"
