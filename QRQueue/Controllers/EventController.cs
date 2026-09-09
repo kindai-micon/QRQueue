@@ -17,6 +17,9 @@ namespace QRQueue.Controllers
         IConfiguration configuration,
         IWebHostEnvironment environment) : ControllerBase
     {
+        // インスタンス毎の生成を避け、System.Text.Json のメタデータキャッシュを効かせる
+        private static readonly JsonSerializerOptions TicketJsonSerializerOptions = new() { MaxDepth = 8 };
+
         [Authorize]
         [HttpGet(nameof(List))]
         public async Task<IActionResult> List()
@@ -114,16 +117,18 @@ namespace QRQueue.Controllers
             {
                 baseDirectory = Path.Combine(environment.ContentRootPath, "TicketJson");
             }
+            // 末尾セパレータ付き設定値でも比較が壊れないよう正規化する
+            var normalizedBaseDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDirectory));
             string fullPath;
             try
             {
-                fullPath = Path.GetFullPath(Path.Combine(baseDirectory, fileName));
+                fullPath = Path.GetFullPath(Path.Combine(normalizedBaseDirectory, fileName));
             }
             catch (Exception)
             {
                 return BadRequest("不正なファイル名です");
             }
-            if (!fullPath.StartsWith(Path.GetFullPath(baseDirectory) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            if (!fullPath.StartsWith(normalizedBaseDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             {
                 return BadRequest("読み込めるのは許可ディレクトリ直下の .json ファイル名のみです");
             }
@@ -149,7 +154,7 @@ namespace QRQueue.Controllers
             jsonTicket[]? tickets;
             try
             {
-                tickets = JsonSerializer.Deserialize<jsonTicket[]>(raw, new JsonSerializerOptions { MaxDepth = 8 });
+                tickets = JsonSerializer.Deserialize<jsonTicket[]>(raw, TicketJsonSerializerOptions);
             }
             catch (JsonException)
             {
