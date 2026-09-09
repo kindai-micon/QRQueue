@@ -92,6 +92,9 @@ jobs:
           # 初期管理者パスコード(APPSETTINGS_JSON とは別のシークレット項目)。
           # 未設定なら APPSETTINGS_JSON の内容をそのまま使う
           INITIAL_ADMIN_PASSCODE: ${{ secrets.INITIAL_ADMIN_PASSCODE }}
+          # 設定確認用エンドポイント(/api/diagnostics/settings)のマスターパスワード。
+          # こちらも APPSETTINGS_JSON とは別のシークレット項目。未設定なら診断APIは無効のまま
+          MASTER_PASSWORD: ${{ secrets.MASTER_PASSWORD }}
         run: |
           DEPLOY_DIR="/var/www/qrqueue/publish"
           SSH="$PWD/ssh-ci"
@@ -135,6 +138,10 @@ jobs:
           # パスコードは永続して問題ない値のため、Secrets を更新するまで同じ値が使われる
           if [ -n "$INITIAL_ADMIN_PASSCODE" ]; then
             APPSETTINGS_JSON=$(printf '%s' "$APPSETTINGS_JSON" | jq --arg p "$INITIAL_ADMIN_PASSCODE" '.InitialAdmin.Passcode = $p')
+          fi
+          # マスターパスワード(設定確認用エンドポイントの認証)も同様に注入
+          if [ -n "$MASTER_PASSWORD" ]; then
+            APPSETTINGS_JSON=$(printf '%s' "$APPSETTINGS_JSON" | jq --arg p "$MASTER_PASSWORD" '.Master.Password = $p')
           fi
           APPSETTINGS_B64=$(echo -n "${APPSETTINGS_JSON}" | base64 -w 0)
 
