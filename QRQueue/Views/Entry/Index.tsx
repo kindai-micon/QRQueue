@@ -299,7 +299,6 @@ export default function Index({ model }: { model: Model }) {
                     )}
                 </div>
             </div>
-         )}
 
             {eventInfo && !eventInfo.isOpen && (
                 <p>現在、受付を行っていません。</p>
@@ -310,7 +309,6 @@ export default function Index({ model }: { model: Model }) {
                 <a href="/transfer">こちら</a>
             </p>
 
-        </div>
         </Layout>
     );
 }
