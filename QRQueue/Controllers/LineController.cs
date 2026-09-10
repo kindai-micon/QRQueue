@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using QRQueue.Models;
 using QRQueue.Models.API;
@@ -32,20 +33,23 @@ namespace QRQueue.Controllers
         [HttpGet("callback")]
         public async Task<IActionResult> Callback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
         {
-            var ticketId = (error == null && code != null && state != null)
+            // 失敗原因コード(reason)を電子券画面に渡す。スマホ等でデベロッパーツールを
+            // 使えない環境でも、画面表示だけで原因を切り分けられるようにするため
+            var (ticketId, failureReason) = (error == null && code != null && state != null)
                 ? await lineService.ResolveBindingAsync(code, state)
-                : null;
+                : (null, error != null ? "cancelled" : "invalid_request");
 
             if (ticketId != null)
             {
                 return Redirect($"/ticket/{ticketId}?line=linked");
             }
 
+            var reasonParam = Uri.EscapeDataString(failureReason ?? "unknown");
             // state からチケットIDが復元できるなら、エラーメッセージ付きで電子券ページへ戻す
             var fallbackTicketId = state != null ? lineService.ExtractTicketIdFromState(state) : null;
             if (fallbackTicketId != null)
             {
-                return Redirect($"/ticket/{fallbackTicketId}?line=error");
+                return Redirect($"/ticket/{fallbackTicketId}?line=error&reason={reasonParam}");
             }
 
             // state も復元できない場合は参加者cookie(participantToken)から戻り先を特定する。
@@ -57,7 +61,7 @@ namespace QRQueue.Controllers
                 var active = await tickets.FindAllActiveByParticipantTokenAsync(participantToken);
                 if (active.Count == 1)
                 {
-                    return Redirect($"/ticket/{active[0].DisplayId}?line=error");
+                    return Redirect($"/ticket/{active[0].DisplayId}?line=error&reason={reasonParam}");
                 }
             }
             return Redirect("/");
@@ -72,6 +76,31 @@ namespace QRQueue.Controllers
                 return NotFound(new ApiMessage("チケットが見つかりません"));
             }
             return Ok(new ApiMessage("LINE連携を解除しました"));
+        }
+
+        // 電子券ページ向け: このチケットのLINE連携の現状(サーバー設定済みか/連携済みか)。
+        // 設定未完了の環境で「押しても動かない連携ボタン」を出さず、利用者に無効である旨を
+        // 伝えて切り分けられるようにするためのデバッグ情報(シークレットは返さない)
+        [HttpGet("status/{guid}")]
+        public async Task<IActionResult> Status([FromRoute] Guid guid)
+        {
+            var lineLinked = await db.Tickets
+                .Where(t => t.DisplayId == guid)
+                .Select(t => t.LineUserId != null)
+                .FirstOrDefaultAsync();
+            return Ok(new
+            {
+                configured = lineService.IsConfigured,
+                lineLinked = lineLinked,
+            });
+        }
+
+        // 電子券ページ向け: 実際にLINEへテスト通知を送って結果を診断する。
+        // 友だち追加の解除・トークン無効・サーバー設定漏れなどを、利用者の手元で切り分けられる
+        [HttpPost("test/{guid}")]
+        public async Task<IActionResult> Test([FromRoute] Guid guid)
+        {
+            return Ok(await lineService.SendTestNotifyAsync(guid));
         }
     }
 }

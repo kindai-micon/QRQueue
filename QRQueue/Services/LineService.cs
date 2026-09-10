@@ -109,17 +109,26 @@ namespace QRQueue.Services
 
         private sealed record TokenResponse(string? AccessToken, string? IdToken);
 
-        public async Task<Guid?> ResolveBindingAsync(string code, string state)
+        public async Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state)
         {
+            // FailureReason は電子券画面に ?line=error&reason=... で渡す短いコード。
+            // スマホ等デベロッパーツールを使えない環境でも原因を画面で分かるようにするため
             if (IsConfigured == false)
             {
                 logger.LogWarning("LINE callback: LINE連携設定が未完成のため失敗(ChannelAccessToken/ClientId/ClientSecret/RedirectUri を確認)");
-                return null;
+                return (null, "config");
             }
             if (!TryParseState(state, out var ticketDisplayId, out var stateFailure))
             {
                 logger.LogWarning("LINE callback: state検証に失敗({Reason})。state先頭={StateHead}", stateFailure, state.Length > 13 ? state[..13] : state);
-                return null;
+                // 原因の種類を画面に渡せるよう細分化する
+                var stateCode = stateFailure switch
+                {
+                    "state署名不一致" => "sign",
+                    "state有効期限切れ(発行から30分超過)" => "expired",
+                    _ => "state",
+                };
+                return (null, stateCode);
             }
 
             try
@@ -139,7 +148,7 @@ namespace QRQueue.Services
                 if (!res.IsSuccessStatusCode)
                 {
                     logger.LogWarning("LINE token交換失敗 ({Status}): {Body}", (int)res.StatusCode, body);
-                    return null;
+                    return (null, "token");
                 }
 
                 var token = JsonSerializer.Deserialize<TokenResponse>(body,
@@ -148,26 +157,26 @@ namespace QRQueue.Services
                 if (string.IsNullOrEmpty(lineUserId))
                 {
                     logger.LogWarning("LINE id_token から sub を取得できませんでした");
-                    return null;
+                    return (null, "idtoken");
                 }
 
                 var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
                 if (ticket == null)
                 {
                     logger.LogWarning("LINE callback: チケットが見つからない ({TicketId})", ticketDisplayId);
-                    return null;
+                    return (null, "ticket");
                 }
                 ticket.LineUserId = lineUserId;
                 await db.SaveChangesAsync();
 
                 await SendNotifyAsync([ticketDisplayId],
                     "QRQueueの呼び出し通知を設定しました。\n順番が来るとこのトークに通知が届きます。");
-                return ticketDisplayId;
+                return (ticketDisplayId, null);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "LINE連携処理でエラー");
-                return null;
+                return (null, "exception");
             }
         }
 
@@ -246,6 +255,75 @@ namespace QRQueue.Services
                 .Where(t => t.DisplayId == ticketDisplayId)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.LineUserId, (string?)null));
             return count > 0;
+        }
+
+        // ===== テスト通知(電子券ページのデバッグ用) =====
+
+        /// <summary>チケット1件宛にテスト通知を実際に送り、結果を診断情報として返す。
+        /// 通常の SendNotifyAsync は失敗してもログのみで黙るため、利用者側から原因を
+        /// 切り分けられるよう、LINE API の応答コードと内容をそのまま返す(シークレットは返さない)</summary>
+        public async Task<Dictionary<string, object?>> SendTestNotifyAsync(Guid ticketDisplayId)
+        {
+            var result = new Dictionary<string, object?> { ["configured"] = IsConfigured };
+            if (!IsConfigured)
+            {
+                result["ok"] = false;
+                result["reason"] = "サーバー側のLINE設定が未完了です(ChannelAccessToken / LoginClientId / LoginClientSecret / RedirectUri)。管理者に連絡してください";
+                return result;
+            }
+
+            var lineUserId = await db.Tickets
+                .Where(t => t.DisplayId == ticketDisplayId)
+                .Select(t => t.LineUserId)
+                .FirstOrDefaultAsync();
+            result["lineLinked"] = lineUserId != null;
+            if (lineUserId == null)
+            {
+                result["ok"] = false;
+                result["reason"] = "このチケットはまだLINE連携されていません。「LINEで通知を受け取る」から連携してください";
+                return result;
+            }
+
+            try
+            {
+                var client = httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
+                using var request = new HttpRequestMessage(HttpMethod.Post,
+                    "https://api.line.me/v2/bot/message/push");
+                request.Headers.Authorization = new("Bearer", ChannelAccessToken);
+                request.Content = new StringContent(
+                    JsonSerializer.Serialize(new
+                    {
+                        to = lineUserId,
+                        messages = new[] { new { type = "text", text = "🔔 テスト通知です。QRQueueの呼び出し通知は正常に設定されています。" } }
+                    }),
+                    Encoding.UTF8, "application/json");
+                var res = await client.SendAsync(request);
+                var body = await res.Content.ReadAsStringAsync();
+                result["pushStatus"] = (int)res.StatusCode;
+                if (res.IsSuccessStatusCode)
+                {
+                    result["ok"] = true;
+                    result["message"] = "テスト通知を送信しました。LINEに届かない場合は公式アカウントの友だち追加が解除されていないか確認してください";
+                }
+                else
+                {
+                    result["ok"] = false;
+                    result["error"] = body;
+                    result["reason"] = (int)res.StatusCode == 400
+                        ? "LINEへの送信が拒否されました(400)。公式アカウントの友だち追加が解除されていないか確認してください"
+                        : (int)res.StatusCode == 401
+                            ? "ChannelAccessToken が無効・期限切れです(401)。管理者はLINE Developersで再発行してください"
+                            : "LINE Messaging API がエラーを返しました";
+                }
+            }
+            catch (Exception ex)
+            {
+                result["ok"] = false;
+                result["reason"] = "LINE APIへの接続に失敗しました(ネットワークエラー/タイムアウト)";
+                result["error"] = $"{ex.GetType().Name}: {ex.Message}";
+            }
+            return result;
         }
 
         // ===== 診断(一時的な診断用エンドポイント向け。シークレットは返さない) =====
