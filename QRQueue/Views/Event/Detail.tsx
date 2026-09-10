@@ -27,7 +27,6 @@ export default function Detail({ model }: { model: Model }) {
             const res = await fetch(`/api/event/${encodeURIComponent(model.eventId)}`, {
                 method: "DELETE",
             });
-            });
             if (res.ok) {
                 window.location.href = "/event";
                 return;
