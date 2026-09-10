@@ -13,6 +13,12 @@ namespace QRQueue.Services
 
         /// <summary>到着確認コードが正しいか検証する</summary>
         Task<bool> IsValidAsync(Guid eventDisplayId, string? code);
+
+        /// <summary>
+        /// 診断用: 保存されたシークレットを新しいランダム値で再生成する。
+        /// 実行すると全イベントの印刷済み受付QRが無効化されるため、再印刷とセットで使う。
+        /// </summary>
+        Task RotateSecretAsync();
     }
 
     public class CheckinCodeService(IConfiguration configuration, IVapidService vapidService) : ICheckinCodeService
@@ -99,6 +105,20 @@ namespace QRQueue.Services
             return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                 System.Text.Encoding.UTF8.GetBytes(code.Trim()),
                 System.Text.Encoding.UTF8.GetBytes(expected));
+        }
+
+        /// <summary>診断用: シークレットを新しいランダム値で再生成する(RotateSecretAsync を参照)</summary>
+        public Task RotateSecretAsync()
+        {
+            lock (SecretFileLock)
+            {
+                var secret = Convert.ToBase64String(
+                    System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+                System.IO.File.WriteAllText(SecretFilePath,
+                    System.Text.Json.JsonSerializer.Serialize(new StoredSecret(secret)));
+                cachedKey = null;
+            }
+            return Task.CompletedTask;
         }
 
         private static string Compute(byte[] key, Guid eventDisplayId)
