@@ -81,6 +81,11 @@ namespace QRQueue.Services
                     ? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
                     : seed;
 
+                var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
                 System.IO.File.WriteAllText(path,
                     System.Text.Json.JsonSerializer.Serialize(new StoredSecret(secret)));
                 return secret;
@@ -114,6 +119,11 @@ namespace QRQueue.Services
             {
                 var secret = Convert.ToBase64String(
                     System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+                var dir = Path.GetDirectoryName(Path.GetFullPath(SecretFilePath));
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
                 System.IO.File.WriteAllText(SecretFilePath,
                     System.Text.Json.JsonSerializer.Serialize(new StoredSecret(secret)));
                 cachedKey = null;
