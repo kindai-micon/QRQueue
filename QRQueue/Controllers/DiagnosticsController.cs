@@ -49,7 +49,7 @@ namespace QRQueue.Controllers
 
         // サーバーに配置された appsettings.json と vapid_keys.json をそのまま返す
         [HttpGet("settings")]
-        public IActionResult Settings()
+        public async Task<IActionResult> Settings()
         {
             if (!IsAuthorized())
             {
@@ -89,6 +89,39 @@ namespace QRQueue.Controllers
             catch (Exception ex)
             {
                 result["vapidKeys"] = new { error = $"{ex.GetType().Name}: {ex.Message}" };
+            }
+
+            // VAPID 鍵の「取得/生成」が実際に成功するかの検出。
+            // ここで失敗すると Web Push 送信・到着確認コード導出の両方が壊れる(VAPID時代の問題)
+            try
+            {
+                var keys = await vapidService.GetOrCreateKeysAsync();
+                result["vapidTest"] = new { ok = true, publicKey = keys.PublicKey };
+            }
+            catch (Exception ex)
+            {
+                result["vapidTest"] = new
+                {
+                    ok = false,
+                    error = $"{ex.GetType().Name}: {ex.Message}",
+                    hint = "VAPID鍵の取得/生成に失敗しています。vapid_keys.json の配置・権限を確認してください(Vapid:KeysFilePath 参照)",
+                };
+            }
+
+            // 到着確認コード導出チェーン(CheckinCodeService)全体の動作確認
+            try
+            {
+                var code = await checkinCodeService.GetCheckinCodeAsync(Guid.NewGuid());
+                result["checkinCodeTest"] = new { ok = true, sampleCode = code };
+            }
+            catch (Exception ex)
+            {
+                result["checkinCodeTest"] = new
+                {
+                    ok = false,
+                    error = $"{ex.GetType().Name}: {ex.Message}",
+                    hint = "到着確認コードの導出に失敗しています。checkin_secret.json の配置・権限を確認してください(Checkin:SecretFilePath 参照)",
+                };
             }
 
             return Ok(result);
