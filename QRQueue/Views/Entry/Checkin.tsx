@@ -17,9 +17,13 @@ export default function Checkin({ model }: { model: Model }) {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [ticketUrl, setTicketUrl] = useState<string | null>(null);
+    // 受付掲示QRに埋め込まれた到着確認コード(issue #68)。
+    // window はサーバーレンダリング(SSR)時に存在しないため、クライアント側でのみ読む。
+    const [receptionCode, setReceptionCode] = useState<string | null>(null);
 
-    // 受付掲示QRに埋め込まれた到着確認コード(issue #68)
-    const receptionCode = new URLSearchParams(window.location.search).get("rc");
+    useEffect(() => {
+        setReceptionCode(new URLSearchParams(window.location.search).get("rc"));
+    }, []);
 
     useEffect(() => {
         (async () => {
