@@ -1,13 +1,19 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using QRQueue.Models;
 using QRQueue.Models.API;
+using QRQueue.Repositories;
 using QRQueue.Services;
 
 namespace QRQueue.Controllers
 {
     [Route("api/line")]
     [ApiController]
-    public class LineController(ILineService lineService, ApplicationDbContext db) : ControllerBase
+    public class LineController(
+        ILineService lineService,
+        ITicketRepository tickets,
+        ApplicationDbContext db) : ControllerBase
     {
         // LINE認証画面へリダイレクト(電子券ページの「LINE連携」ボタンの飛び先)
         [HttpGet("authorize/{guid}")]
@@ -20,7 +26,9 @@ namespace QRQueue.Controllers
             return Redirect(lineService.BuildAuthorizeUrl(guid));
         }
 
-        // LINE Login の戻り先。紐付けを保存して電子券ページへ戻す
+        // LINE Login の戻り先。紐付けを保存して電子券ページへ戻す。
+        // 失敗時も可能な限り電子券ページへ戻す(ホームはログイン必須のため、
+        // 匿名の参加者を / に飛ばすとログイン画面に転送されてしまう)
         [HttpGet("callback")]
         public async Task<IActionResult> Callback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
         {
@@ -28,11 +36,31 @@ namespace QRQueue.Controllers
                 ? await lineService.ResolveBindingAsync(code, state)
                 : null;
 
-            if (ticketId == null)
+            if (ticketId != null)
             {
-                return Redirect("/");
+                return Redirect($"/ticket/{ticketId}?line=linked");
             }
-            return Redirect($"/ticket/{ticketId}?line=linked");
+
+            // state からチケットIDが復元できるなら、エラーメッセージ付きで電子券ページへ戻す
+            var fallbackTicketId = state != null ? lineService.ExtractTicketIdFromState(state) : null;
+            if (fallbackTicketId != null)
+            {
+                return Redirect($"/ticket/{fallbackTicketId}?line=error");
+            }
+
+            // state も復元できない場合は参加者cookie(participantToken)から戻り先を特定する。
+            // participant cookie は SameSite=Lax のため、LINE からのトップレベルリダイレクトでも送られる。
+            // 有効なチケットが1件だけのときに限り確定できる(複数あると対象を判定できない)
+            if ((await HttpContext.AuthenticateAsync("Participant")).Principal is { } principal &&
+                Guid.TryParse(principal.FindFirstValue("participantToken"), out var participantToken))
+            {
+                var active = await tickets.FindAllActiveByParticipantTokenAsync(participantToken);
+                if (active.Count == 1)
+                {
+                    return Redirect($"/ticket/{active[0].DisplayId}?line=error");
+                }
+            }
+            return Redirect("/");
         }
 
         // LINE連携の解除

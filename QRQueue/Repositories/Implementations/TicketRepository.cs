@@ -45,6 +45,18 @@ namespace QRQueue.Repositories.Implementations
                     || x.ParticipationGroup.Status != GroupStatus.Cancelled));
         }
 
+        public Task<List<Ticket>> FindAllActiveByParticipantTokenAsync(Guid participantToken)
+        {
+            return applicationDbContext.Tickets
+                .Include(x => x.ParticipationGroup).ThenInclude(x => x.Event)
+                .Where(x => x.ParticipantToken == participantToken
+                    && x.Status == TicketStatus.Registered
+                    && (x.ParticipationGroupId == null
+                        || x.ParticipationGroup.Status != GroupStatus.Cancelled))
+                .OrderByDescending(x => x.Created)
+                .ToListAsync();
+        }
+
         public Task<Ticket?> FindActiveByTransferCodeAsync(string transferCodeHash)
         {
             return applicationDbContext.Tickets
