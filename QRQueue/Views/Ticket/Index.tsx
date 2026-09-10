@@ -17,6 +17,11 @@ export default function Index({ model }: { model: Model }) {
     // notice の種別(成功=緑/失敗=赤)。既定は赤(従来のエラー表示と同じ)
     const [noticeKind, setNoticeKind] = useState<"error" | "success">("error");
     const [lineLinked, setLineLinked] = useState(false);
+    // LINE通知のデバッグ用: サーバー側のLINE設定が有効か(未設定なら連携ボタンを出さず無効旨を表示)
+    const [lineConfigured, setLineConfigured] = useState<boolean | null>(null);
+    const [lineTestSending, setLineTestSending] = useState(false);
+    // テスト通知の診断結果(画面に表示する。スマホは console が見れないため画面表示が基本)
+    const [lineDebug, setLineDebug] = useState<{ label: string; value: string }[] | null>(null);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
     const [transferCode, setTransferCode] = useState<string | null>(null);
     const [transferring, setTransferring] = useState(false);
@@ -101,9 +106,23 @@ export default function Index({ model }: { model: Model }) {
             setNoticeKind("success");
             window.history.replaceState(null, "", window.location.pathname);
         }
-        // LINE連携が失敗した場合もログイン画面などへは飛ばされず、この画面に戻される
+        // LINE連携が失敗した場合もログイン画面などへは飛ばされず、この画面に戻される。
+        // サーバー渡しの reason コードから原因を画面に表示する(スマホは console を見れないため)
         if (new URLSearchParams(window.location.search).get("line") === "error") {
-            setNotice("❌ LINE連携に失敗しました。お手数ですが、もう一度お試しください");
+            const reason = new URLSearchParams(window.location.search).get("reason") ?? "unknown";
+            const reasonText: Record<string, string> = {
+                cancelled: "LINE連携がキャンセルされました。もう一度「LINEで通知を受け取る」からお試しください",
+                config: "サーバー側のLINE設定が未完了のため連携できませんでした。スタッフに「LINE設定が未完了」とお伝えください",
+                state: "連携の状態が不正でした。もう一度お試しください(繰り返す場合はスタッフに「state形式不正」とお伝えください)",
+                sign: "連携の署名検証に失敗しました。もう一度お試しください(繰り返す場合はスタッフに「署名不一致」とお伝えください)",
+                expired: "連携の有効期限が切れました。電子券ページに戻ってからもう一度「LINEで通知を受け取る」を押してください",
+                token: "LINEの認証に失敗しました。時間を置いてもう一度お試しください(繰り返す場合はスタッフに「トークン交換失敗」とお伝えください)",
+                idtoken: "LINEからユーザー情報を取得できませんでした。もう一度お試しください",
+                ticket: "チケットが見つかりませんでした。受付取消・引き継ぎされていないか確認してください",
+                invalid_request: "連携のパラメータが不正でした。電子券ページからもう一度やり直してください",
+                exception: "連携処理中にエラーが発生しました。もう一度お試しください",
+            };
+            setNotice(`❌ LINE連携に失敗しました: ${reasonText[reason] ?? reasonText.invalid_request} [原因コード: ${reason}]`);
             setNoticeKind("error");
             window.history.replaceState(null, "", window.location.pathname);
         }
@@ -320,6 +339,62 @@ export default function Index({ model }: { model: Model }) {
         }
     }
 
+    // サーバー側のLINE設定とこのチケットの連携状態を取得する(デバッグ用)。
+    // 設定未完了の環境では連携ボタンを無効化して利用者に分かるようにする
+    async function loadLineStatus() {
+        try {
+            const res = await fetch(`/api/line/status/${model.ticketId}`);
+            if (!res.ok) {
+                console.error("LINE連携状態の取得に失敗:", res.status, await readErrorMessage(res));
+                return;
+            }
+            const data: { configured: boolean; lineLinked: boolean } = await res.json();
+            setLineConfigured(data.configured);
+            if (data.lineLinked) {
+                setLineLinked(true);
+            }
+        } catch (error) {
+            console.error("LINE連携状態の取得に失敗:", error);
+        }
+    }
+
+    // 実際にLINEへテスト通知を送って結果を診断する。
+    // 結果は専用のデバッグボックスに画面表示する(スマホは console を見れないため)
+    async function sendLineTestNotification() {
+        setNotice(null);
+        setLineDebug(null);
+        setLineTestSending(true);
+        try {
+            const res = await fetch(`/api/line/test/${model.ticketId}`, { method: "POST" });
+            const data = await res.json().catch(() => null);
+            const debugRows = [
+                { label: "日時", value: new Date().toLocaleString() },
+                { label: "HTTP", value: String(res.status) },
+                ...(data != null ? [
+                    { label: "サーバー設定", value: data.configured ? "設定済み" : "未設定(管理者対応が必要)" },
+                    { label: "LINE連携", value: data.lineLinked ? "連携済み" : "未連携" },
+                    ...(data.pushStatus != null ? [{ label: "LINE API応答", value: `HTTP ${data.pushStatus}` }] : []),
+                    ...(data.reason ? [{ label: "原因", value: String(data.reason) }] : []),
+                    ...(data.error ? [{ label: "LINE APIエラー詳細", value: String(data.error) }] : []),
+                ] : []),
+            ];
+            setLineDebug(debugRows);
+            if (res.ok && data?.ok) {
+                setNotice(`✅ ${data.message ?? "テスト通知を送信しました"}`);
+                setNoticeKind("success");
+            } else {
+                const reason = data?.reason ?? (res.ok ? "送信に失敗しました" : `HTTP ${res.status}`);
+                setNotice(`❌ LINEテスト通知に失敗しました。下の診断結果を確認してください(${reason})`);
+                setNoticeKind("error");
+            }
+        } catch {
+            setLineDebug([{ label: "日時", value: new Date().toLocaleString() }, { label: "結果", value: "サーバーと通信できませんでした(ネットワークエラー)" }]);
+            setNotice("❌ LINEテスト通知の送信に失敗しました(通信エラー)");
+        } finally {
+            setLineTestSending(false);
+        }
+    }
+
     // LINE連携の解除
     async function unlinkLine() {
         try {
@@ -355,6 +430,7 @@ export default function Index({ model }: { model: Model }) {
                 if (disposed) return;
                 setTicketData(data);
                 setLineLinked(data.lineLinked ?? false);
+                await loadLineStatus();
 
                 // チケットのイベントが確定したら SignalR グループへ参加
                 if (data.eventId && data.eventId !== joinedEventId && connection?.state === "Connected") {
@@ -443,14 +519,43 @@ export default function Index({ model }: { model: Model }) {
                             {lineLinked ? (
                                 <>
                                     <div class="line-linked-label">LINE通知 連携済み</div>
+                                    {/* テスト通知: 実際にLINEへ送り、失敗原因(友だち未追加/トークン無効等)を表示する */}
+                                    <button
+                                        class="line-test-btn"
+                                        onClick={sendLineTestNotification}
+                                        disabled={lineTestSending}
+                                    >
+                                        {lineTestSending ? "送信中..." : "テスト通知"}
+                                    </button>
                                     <button class="line-unlink-btn" onClick={unlinkLine}>解除</button>
                                 </>
+                            ) : lineConfigured === false ? (
+                                // サーバー側でLINE設定が未完了: 押しても動かないボタンより、無効である旨を明示する
+                                <div class="line-disabled-label">
+                                    ⚠️ LINE通知は現在サーバー側で無効です(管理者の設定待ち)。
+                                    ブラウザの「呼び出し通知」はご利用いただけます
+                                </div>
                             ) : (
                                 <a class="line-btn" href={`/api/line/authorize/${model.ticketId}`}>
                                     LINEで通知を受け取る
                                 </a>
                             )}
                         </div>
+                        {/* テスト通知の診断結果(スマホは console を見れないため画面にそのまま出す) */}
+                        {lineDebug && (
+                            <div class="line-debug-box">
+                                <div class="line-debug-title">LINE通知の診断結果</div>
+                                {lineDebug.map((row) => (
+                                    <div class="line-debug-row" key={row.label}>
+                                        <span class="line-debug-label">{row.label}</span>
+                                        <span class="line-debug-value">{row.value}</span>
+                                    </div>
+                                ))}
+                                <div class="line-debug-note">
+                                    スクリーンショットを撮ってスタッフにお見せください
+                                </div>
+                            </div>
+                        )}
                         <div class="header">
                             <h1>{ticketData.eventName ?? "電子券"}</h1>
                             <p>あなたの参加証(この画面が唯一の参加証です)</p>

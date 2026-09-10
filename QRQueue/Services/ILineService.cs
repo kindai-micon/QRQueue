@@ -9,8 +9,9 @@ namespace QRQueue.Services
         string BuildAuthorizeUrl(Guid ticketDisplayId);
 
         /// <summary>コールバックの code/state を検証してチケットに LineUserId を紐付け、
-        /// 紐付けたチケットのDisplayIdを返す(失敗時 null)</summary>
-        Task<Guid?> ResolveBindingAsync(string code, string state);
+        /// 紐付いたチケットのDisplayIdを返す。失敗時は TicketDisplayId=null とともに
+        /// FailureReason(画面表示用の短い原因コード)を返す</summary>
+        Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state);
 
         /// <summary>state(署名付きトークン)からチケットDisplayIdだけを緩く取り出す。
         /// 連携失敗時でも電子券ページへユーザーを戻すために使う(署名・期限の検証はしない)。
@@ -22,6 +23,10 @@ namespace QRQueue.Services
 
         /// <summary>チケットのLINE連携を解除する</summary>
         Task<bool> UnlinkAsync(Guid ticketDisplayId);
+
+        /// <summary>チケット1件宛にテスト通知を実際に送り、結果を診断情報として返す。
+        /// 電子券ページのデバッグ用で、シークレットは返さず原因(設定未完了/未連携/友だち未追加/トークン無効)を返す</summary>
+        Task<Dictionary<string, object?>> SendTestNotifyAsync(Guid ticketDisplayId);
 
         /// <summary>LINE連携の設定・資格情報を診断する(一時的な診断用エンドポイント向け)。
         /// シークレットそのものは返さず、設定済みかどうかと検証結果を返す</summary>
