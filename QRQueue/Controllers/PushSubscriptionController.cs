@@ -1,9 +1,10 @@
-﻿using QRQueue.Models;
+using QRQueue.Models;
 using QRQueue.Models.API;
 using QRQueue.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography.X509Certificates;
+using System.Security.Claims;
 
 namespace QRQueue.Controllers
 {
@@ -26,6 +27,14 @@ namespace QRQueue.Controllers
         [HttpPost("{guid}/test")]
         public async Task<IActionResult> SendTest([FromRoute] Guid guid)
         {
+            // チケットの正当な所有者のみテスト通知を送信できる(issue #64/#80)。
+            // 検証がないと第三者がチケットIDを知るだけで対象端末へ通知を送れる。
+            var ownershipError = await CheckTicketOwnershipAsync(guid);
+            if (ownershipError != null)
+            {
+                return ownershipError;
+            }
+
             var report = await _pushSubscriptionService.SendTestAsync(guid);
 
             if (report.Subscriptions == 0)
@@ -39,11 +48,22 @@ namespace QRQueue.Controllers
             return Ok(new ApiMessage("テスト通知を送信しました。届かない場合は端末の通知許可・ホーム画面に追加を確認してください"));
         }
 
+        /// <summary>
+        /// 呼び出し通知の購読登録(issue #80)。
+        /// リクエスト元の参加者cookie(participantToken)がチケットの所有者と一致する場合のみ
+        /// 登録を許可する。有効なチケットIDを知る第三者による他参加者チケットへの購読登録・
+        /// 上書きを防止する。
+        /// </summary>
         [HttpPost("{guid}")]
         public async Task<IActionResult> Subscribe(
             [FromRoute] Guid guid,
             [FromBody] PushSubscriptionDTO subscriptionDTO)
         {
+            var ownershipError = await CheckTicketOwnershipAsync(guid);
+            if (ownershipError != null)
+            {
+                return ownershipError;
+            }
             // 鍵の無い購読は送信時に必ず失敗するため弾く
             if (string.IsNullOrEmpty(subscriptionDTO?.Endpoint)
                 || string.IsNullOrEmpty(subscriptionDTO.Keys?.P256dh)
@@ -86,6 +106,49 @@ namespace QRQueue.Controllers
                 return new VapidPublicKeyView(keys.PublicKey);
             }
             return StatusCode(500, new ApiMessage("Push notifications not configured"));
+        }
+
+        /// <summary>
+        /// 参加者cookie(§5.2.1)から participantToken を取得する。
+        /// OnValidatePrincipal でDB照合済みのため、失効トークンは null 扱いになる。
+        /// </summary>
+        private async Task<Guid?> ParticipantTokenAsync()
+        {
+            var auth = await HttpContext.AuthenticateAsync("Participant");
+            if (!auth.Succeeded)
+            {
+                return null;
+            }
+            return Guid.TryParse(auth.Principal?.FindFirstValue("participantToken"), out var token)
+                ? token
+                : (Guid?)null;
+        }
+
+        /// <summary>
+        /// チケット所有権の検証(issue #80)。
+        /// 操作可能なのは「参加者cookieと結び付いた自分のチケット」のみ。
+        /// 検証に失敗した場合は、ここで適切なステータスコードの応答を返す。
+        /// - cookie 未所持: 401
+        /// - チケット未存在・所有者不一致: 403(存在の有無を窓口で区別しない)
+        /// - 紙券など所有者トークンを持たないチケット: 403(所有確認が成立しないため操作不可)
+        /// </summary>
+        /// <returns>検証OKの場合は null、失敗の場合は応答</returns>
+        private async Task<IActionResult?> CheckTicketOwnershipAsync(Guid ticketDisplayId)
+        {
+            var participantToken = await ParticipantTokenAsync();
+            if (participantToken == null)
+            {
+                return Unauthorized(new { error = "参加者cookieがありません。参加登録した端末から操作してください。" });
+            }
+
+            var ticket = await _db.Tickets.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
+            if (ticket == null || ticket.ParticipantToken == null || ticket.ParticipantToken != participantToken)
+            {
+                return StatusCode(403, new { error = "このチケットに対する操作権限がありません" });
+            }
+
+            return null;
         }
     }
 }

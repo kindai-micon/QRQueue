@@ -64,7 +64,8 @@ namespace QRQueue.Controllers
 
             // 電子券画面用: 代表者判定とグループ参加QR(joinToken)の可否
             // 代表者 = 有効チケットの中で最も早く参加した者(方式③=作成者、方式②=参加順先頭、方式①=本人)
-            // joinToken は「本人アクセス」の場合にのみ返す(第三者・スタッフには返さない)
+            // joinToken は本人アクセスかつ、受付確定前(Draft)/待機中(Waiting)の場合にのみ返す
+            // (代表者がメンバーを追加するため。第三者・スタッフには返さない)
             string? joinToken = null;
             bool isRepresentative = false;
             if (group != null)
@@ -74,11 +75,16 @@ namespace QRQueue.Controllers
                     .OrderBy(t => t.Created).ThenBy(t => t.Id)
                     .FirstOrDefault();
                 isRepresentative = firstActive != null && firstActive.Id == ticket.Id;
-                if (isOwner && isRepresentative && group.Type == GroupType.Manual && group.Status == GroupStatus.Waiting)
+                if (isOwner && isRepresentative && group.Type == GroupType.Manual
+                    && group.Status is GroupStatus.Draft or GroupStatus.Waiting)
                 {
                     joinToken = group.JoinToken;
                 }
             }
+
+            // 受付確定前の管理情報(issue #66)
+            var memberCount = group?.Tickets.Count(t => t.Status != TicketStatus.Cancelled);
+            var allowCoJoin = group?.AllowCoJoin;
 
             // 拡張 : 現在の呼び出し番号と自分の順位 aheadCount(前面の Waiting グループ数)
             long? currentCallingNumber = null;
@@ -98,15 +104,22 @@ namespace QRQueue.Controllers
             return new TicketView(
                 group?.Number ?? ticket.Number,
                 group?.Status.ToString() ?? ticket.Status.ToString(),
+                // チケット自体の状態(使用済みなど、グループ状態とは独立に表示する)(issue #71)
+                ticket.Status.ToString(),
+                ticket.Status == TicketStatus.Used,
                 ev?.DisplayId,
                 // === 電子券画面用 拡張項目 ===
                 ev?.Name,
                 group?.Number,
                 currentCallingNumber,
                 aheadCount,
+                // === 受付確定フロー(issue #66) ===
+                memberCount,
+                allowCoJoin,
                 // === 電子券画面用 接着項目 ===
                 joinToken,
-                isRepresentative);
+                isRepresentative,
+                ticket.LineUserId != null);
         }
 
         /// <summary>

@@ -24,10 +24,8 @@ export default function Detail({ model }: { model: Model }) {
     async function executeDelete() {
         setDeleting(true);
         try {
-            const res = await fetch("/api/event/Delete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(eventName),
+            const res = await fetch(`/api/event/${encodeURIComponent(model.eventId)}`, {
+                method: "DELETE",
             });
             if (res.ok) {
                 window.location.href = "/event";

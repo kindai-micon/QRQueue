@@ -65,10 +65,9 @@ export default function Index() {
         if (!targetToDelete) return;
         setDeleting(true);
         try {
-            const res = await fetch("/api/event/Delete", {
-                method: "POST",
+                const res = await fetch(`/api/event/${encodeURIComponent(targetToDelete.id)}`, {
+                    method: "DELETE",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(targetToDelete.name),
             });
             if (res.ok) {
                 setEvents((prev) => prev?.filter((e) => e.id !== targetToDelete.id) ?? null);

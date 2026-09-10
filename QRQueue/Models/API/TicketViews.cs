@@ -6,11 +6,17 @@ namespace QRQueue.Models.API
     public record TicketView(
         long Number,
         string Status,
+        // チケット自体の状態(使用済みなど、グループ状態とは独立に表示する)(issue #71)
+        string? TicketStatus,
+        bool Used,
         Guid? EventId,
         string? EventName,
         long? GroupNumber,
         long? CurrentCallingNumber,
         int? AheadCount,
+        int? MemberCount,
+        bool? AllowCoJoin,
         string? JoinToken,
-        bool IsRepresentative);
+        bool IsRepresentative,
+        bool LineLinked);
 }

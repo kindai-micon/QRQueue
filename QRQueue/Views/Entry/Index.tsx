@@ -162,13 +162,8 @@ export default function Index({ model }: { model: Model }) {
 
             const data: JoinResult = await response.json();
 
-            if (mode === "group-create") {
-                setJoinToken(data.joinToken ?? null);
-                setGroupNumber(data.groupNumber);
-                setCreatedTicketId(data.ticketDisplayId);
-                return;
-            }
-
+            // 受付確定(メンバー追加・人数・同時参加可否の変更)は電子券画面で行う(issue #66)。
+            // group-create の場合も代表者はまず電子券画面へ遷移する。
             window.location.href = `/ticket/${data.ticketDisplayId}`;
         } catch (err) {
             console.error("参加登録(上書き)に失敗:", err);
@@ -304,6 +299,16 @@ export default function Index({ model }: { model: Model }) {
                     )}
                 </div>
             </div>
+
+            {eventInfo && !eventInfo.isOpen && (
+                <p>現在、受付を行っていません。</p>
+            )}
+
+            <p style={{ fontSize: "0.85rem" }}>
+                別の端末から引き継ぐ(引き継ぎコードをお持ちの方は)
+                <a href="/transfer">こちら</a>
+            </p>
+
         </Layout>
     );
 }

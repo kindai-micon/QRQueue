@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -124,29 +124,175 @@ namespace QRQueue.Controllers
         [HttpPut("again/{eventDisplayId}")]
         public async Task<IActionResult> Again(Guid eventDisplayId)
         {
-            var callingGroup = await _db.ParticipationGroups
-                .Include(x => x.Tickets)
-                .FirstOrDefaultAsync(x =>
-                x.Event.DisplayId == eventDisplayId &&
-                x.Status == GroupStatus.Calling);
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+
+            // 再呼び出しもイベント排他制御下で直列化し、状態更新の競合を防ぐ(issue #82)
+            var callingGroup = await _queueCallService.RunExclusiveAsync(ev, async () =>
+            {
+                var group = await _db.ParticipationGroups
+                    .Include(x => x.Tickets)
+                    .FirstOrDefaultAsync(x =>
+                        x.Event.DisplayId == eventDisplayId &&
+                        x.Status == GroupStatus.Calling);
+                if (group == null)
+                {
+                    return null;
+                }
+                if (group.Tickets.Count == 0)    //チケットがなかった時を想定.
+                {
+                    return null;
+                }
+                await _pushSubscriptionService.SendNotifyTicketGroupAsync(group.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
+                group.CallCount++;
+                group.CalledAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync();
+                return group;
+            });
 
             if (callingGroup == null)
             {
                 return NotFound();
             }
+            return Ok();
+        }
 
-            if (callingGroup.Tickets.Count == 0)    //下のifでチケットがなかった時を想定.
+        /// <summary>
+        /// グループを優先待機(Interrupted)へ移動する(issue #73)。
+        /// 未到着グループを枠から除外して到着済みグループだけでゲームを進めたい場合や、
+        /// 到着済みだが次の枠へ回したい場合にスタッフが使用する。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("group/{groupDisplayId}/interrupt")]
+        public async Task<IActionResult> InterruptGroup(Guid groupDisplayId)
+        {
+            var group = await _db.ParticipationGroups
+                .Include(x => x.Event)
+                .Include(x => x.Tickets)
+                .FirstOrDefaultAsync(x => x.DisplayId == groupDisplayId);
+            if (group == null)
             {
                 return NotFound();
             }
-            await _pushSubscriptionService.SendNotifyTicketGroupAsync(callingGroup.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
-            callingGroup.CallCount++;
-            callingGroup.CalledAt = DateTimeOffset.UtcNow;
-            
+            if (group.Status is not (GroupStatus.Calling or GroupStatus.Completed))
+            {
+                return Conflict("呼び出し中またはチェックイン済みのグループのみ優先待機へ移動できます");
+            }
 
+            group.Status = GroupStatus.Interrupted;
             await _db.SaveChangesAsync();
-            
-            return Ok();
+
+            await _hubContext.Clients.Group(group.Event.DisplayId.ToString()).SendAsync("QueueChanged");
+            return Ok(new { groupNumber = group.Number, status = group.Status.ToString() });
+        }
+
+        /// <summary>
+        /// グループの棄権処理(チケット無効化)(issue #73)。
+        /// 未到着グループを棄権扱いにし、グループと有効チケットをすべて無効化する。
+        /// 無効化されたチケットは再利用できない。スタッフのみ実行できる(CallExecute)。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("group/{groupDisplayId}/forfeit")]
+        public async Task<IActionResult> ForfeitGroup(Guid groupDisplayId)
+        {
+            var group = await _db.ParticipationGroups
+                .Include(x => x.Event)
+                .Include(x => x.Tickets)
+                .FirstOrDefaultAsync(x => x.DisplayId == groupDisplayId);
+            if (group == null)
+            {
+                return NotFound();
+            }
+            if (group.Status is GroupStatus.Cancelled)
+            {
+                return Conflict("既に取り消されています");
+            }
+
+            group.Status = GroupStatus.Cancelled;
+            group.JoinToken = null;
+            var cancelled = 0;
+            foreach (var ticket in group.Tickets.Where(t => t.Status == TicketStatus.Registered))
+            {
+                ticket.Status = TicketStatus.Cancelled;
+                cancelled++;
+            }
+            await _db.SaveChangesAsync();
+
+            await _hubContext.Clients.Group(group.Event.DisplayId.ToString()).SendAsync("QueueChanged");
+            return Ok(new { groupNumber = group.Number, cancelledTickets = cancelled });
+        }
+
+        /// <summary>
+        /// ゲーム終了の確定(issue #71)。
+        /// チェックイン済み(Completed)グループの有効チケットを「使用済み(Used)」にする。
+        /// groupNumber 未指定の場合は、直近に呼び出された枠(CalledAt が最大の Completed
+        /// グループ群=同時呼び出しされたグループ全体)を対象とする。
+        /// ※ Updated はレコード作成時刻のみを反映するため直近特定には使えない(レビュー指摘)。
+        /// 使用済みチケットは再チェックイン・再呼び出しの対象にならず、
+        /// 同じ参加者は新しいチケットで再度受付できる。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("done/{eventDisplayId}")]
+        public async Task<IActionResult> Done(Guid eventDisplayId, [FromBody] long? groupNumber)
+        {
+            var query = _db.ParticipationGroups
+                .Include(g => g.Tickets)
+                .Where(g => g.Event.DisplayId == eventDisplayId);
+
+            List<ParticipationGroup> targets;
+            if (groupNumber.HasValue)
+            {
+                var group = await query.FirstOrDefaultAsync(g => g.Number == groupNumber.Value);
+                if (group == null)
+                {
+                    return NotFound();
+                }
+                targets = new List<ParticipationGroup> { group };
+            }
+            else
+            {
+                // 直近に呼び出された枠(同時呼び出しされたグループ群)をまとめて対象にする
+                var latestCalledAt = await query
+                    .Where(g => g.Status == GroupStatus.Completed && g.CalledAt != null)
+                    .MaxAsync(g => (DateTimeOffset?)g.CalledAt);
+                if (latestCalledAt == null)
+                {
+                    return NotFound();
+                }
+                targets = await query
+                    .Where(g => g.Status == GroupStatus.Completed && g.CalledAt == latestCalledAt)
+                    .ToListAsync();
+            }
+
+            if (targets.Any(g => g.Status != GroupStatus.Completed))
+            {
+                return Conflict("チェックイン済みのグループのみ使用済みにできます");
+            }
+
+            var usedTickets = 0;
+            foreach (var group in targets)
+            {
+                foreach (var ticket in group.Tickets.Where(t => t.Status == TicketStatus.Registered))
+                {
+                    ticket.Status = TicketStatus.Used;
+                    usedTickets++;
+                }
+            }
+            await _db.SaveChangesAsync();
+
+            var ev = await _db.Events.FirstAsync(x => x.DisplayId == eventDisplayId);
+            await _hubContext.Clients.Group(eventDisplayId.ToString()).SendAsync("QueueChanged");
+
+            return Ok(new
+            {
+                groupNumber = targets.First().Number,
+                groupNumbers = targets.Select(g => g.Number),
+                usedTickets = usedTickets,
+                eventName = ev.Name
+            });
         }
 
         [Authorize(Policy = "CallView")]
@@ -155,7 +301,15 @@ namespace QRQueue.Controllers
         {
             var view = new QueueView();
 
-            // 先頭が「次に呼ぶグループ」になるよう番号順に固定(先着順)
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+
+            // 一定時間を超えた未到着グループを優先待機へ退避(issue #69)
+            await _queueCallService.EvacuateExpiredSlotGroupsAsync(ev);
+
             var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).ToListAsync();
 
             var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).OrderBy(x => x.CalledAt).ToListAsync();
@@ -168,24 +322,62 @@ namespace QRQueue.Controllers
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status
+                Status = x.Status,
+                DisplayId = x.DisplayId
             });
 
             view.CallingGroup = callingGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status
+                Status = x.Status,
+                DisplayId = x.DisplayId
             });
 
             view.InterruptedGroup = interruptedGroups.Select(x => new ParticipationGroupView()
             {
                 Number = x.Number,
                 People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status
+                Status = x.Status,
+                DisplayId = x.DisplayId
             });
 
             view.PeoplePool = matchingGroups.Sum(x => x.Tickets.Count(t => t.Status != TicketStatus.Cancelled));
+
+            // ゲーム参加枠ごとの到着状況(issue #69):
+            // Calling/Interrupted のグループが属する枠(=まだ処理中の枠)を対象に、
+            // 枠内の各グループの到着(チェックイン)状態を返す
+            var activeSlotIds = callingGroups.Concat(interruptedGroups)
+                .Where(x => x.GameSlotId != null)
+                .Select(x => x.GameSlotId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (activeSlotIds.Count > 0)
+            {
+                var slotGroups = await _db.ParticipationGroups
+                    .Include(x => x.Tickets)
+                    .Where(x => x.Event.DisplayId == eventDisplayId && activeSlotIds.Contains(x.GameSlotId!.Value))
+                    .ToListAsync();
+
+                view.Slots = slotGroups
+                    .GroupBy(x => x.GameSlotId!.Value)
+                    .Select(g => new GameSlotView
+                    {
+                        SlotId = g.Key.ToString(),
+                        CalledAt = g.Max(x => x.CalledAt),
+                        AllArrived = g.All(x => x.Status == GroupStatus.Completed),
+                        Groups = g.OrderBy(x => x.Number).Select(x => new ParticipationGroupView
+                        {
+                            Number = x.Number,
+                            People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
+                            Status = x.Status,
+                            DisplayId = x.DisplayId
+                        })
+                    })
+                    .OrderByDescending(x => x.CalledAt)
+                    .ToList();
+            }
 
             return view;
         }

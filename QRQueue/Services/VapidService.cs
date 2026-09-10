@@ -37,6 +37,13 @@ namespace QRQueue.Services
 
                 var newKeys = GenerateKeys();
                 var newJson = System.Text.Json.JsonSerializer.Serialize(newKeys);
+                // 保存先ディレクトリ(data 等)が未作成だと DirectoryNotFoundException で
+                // 鍵生成自体が失敗し、Push送信・到着確認コード導出が全滅するため自動作成する
+                var dir = Path.GetDirectoryName(Path.GetFullPath(_keysFilePath));
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
                 await File.WriteAllTextAsync(_keysFilePath, newJson);
 
                 return newKeys;

@@ -55,12 +55,20 @@ namespace QRQueue.Controllers
         [HttpGet("/event/{eventid}/queue")]
         public IActionResult Queue(string eventid) => Page("Event/Queue", new { eventId = eventid });
 
+        // 受付確認QRの自動更新表示(issue #76)
+        [HttpGet("/checkin-qr/{eventid}")]
+        public IActionResult CheckinQr(string eventid) => Page("Event/CheckinQr", new { eventId = eventid });
+
         [HttpGet("/ticket/{ticketid}")]
         public IActionResult Ticket(string ticketid) => Page("Ticket/Index", new { ticketId = ticketid });
 
         // 参加者向け匿名ページ(設計書)
         [HttpGet("/join/{token}")]
         public IActionResult Join(string token) => Page("Entry/Join", new { joinToken = token });
+
+        // チケット引き継ぎ(別端末への復元、issue #75)
+        [HttpGet("/transfer")]
+        public IActionResult Transfer() => Page("Entry/Transfer", new { });
 
         [HttpGet("/checkin/{eventid}")]
         public IActionResult Checkin(string eventid) => Page("Entry/Checkin", new { eventDisplayId = eventid });

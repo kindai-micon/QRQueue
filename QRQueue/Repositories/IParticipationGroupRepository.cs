@@ -26,6 +26,9 @@ namespace QRQueue.Repositories
         /// <summary>現在呼び出し中のグループ</summary>
         Task<List<ParticipationGroup>> GetCallingAsync(Guid eventId);
 
+        /// <summary>指定ゲーム参加枠に到着済み(チェックイン済み=Completed)グループが存在するか(issue #69)</summary>
+        Task<bool> HasArrivedGroupAsync(Guid eventId, Guid slotId);
+
         /// <summary>イベント内の採番済み最大呼び出し番号(未採番=0)</summary>
         Task<long> GetMaxNumberAsync(Guid eventId);
 

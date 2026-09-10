@@ -13,6 +13,12 @@ namespace QRQueue.Services
 
         /// <summary>到着確認コードが正しいか検証する(直前ウィンドウの許容を含む)</summary>
         Task<bool> IsValidAsync(Guid eventDisplayId, string? code);
+
+        /// <summary>
+        /// 診断用: 保存されたシークレットを新しいランダム値で再生成する。
+        /// 実行すると全イベントの印刷済み受付QRが無効化されるため、再印刷とセットで使う。
+        /// </summary>
+        Task RotateSecretAsync();
     }
 
     public class CheckinCodeService(IConfiguration configuration, IVapidService vapidService) : ICheckinCodeService
@@ -20,13 +26,17 @@ namespace QRQueue.Services
         /// <summary>コードの更新間隔(秒)。受付画面のQRはこの間隔で更新される</summary>
         public const int WindowSeconds = 30;
 
+        private static readonly object SecretFileLock = new();
         private byte[]? cachedKey;
 
         /// <summary>
         /// コード導出用のサーバー秘密鍵。
-        /// 設定 Checkin:ReceptionSecret を優先し、未設定の場合は VAPID 秘密鍵
-        /// (vapid_keys.json ファイルに永続化。喪失時は再生成により掲示済みQRの
-        /// 確認コードが無効化されるため、安定性は設定値より劣る)から導出する。
+        /// 1) 設定 Checkin:ReceptionSecret があればそれを最優先で使用
+        /// 2) 未設定なら専用ファイル(Checkin:SecretFilePath、既定 checkin_secret.json)に
+        ///    自動生成したシークレットを保存して使用する。
+        ///    その際、VAPID 鍵が既に存在する環境では VAPID 秘密鍵を初期値として引き継ぐため、
+        ///    以前のフォールバック時代に印刷した掲示QRも無効化されない。
+        ///    以後は VAPID 鍵の再生成・喪失の影響を受けない。
         /// </summary>
         private async Task<byte[]> GetKeyAsync()
         {
@@ -42,12 +52,50 @@ namespace QRQueue.Services
             }
             else
             {
-                var keys = await vapidService.GetOrCreateKeysAsync();
-                key = System.Text.Encoding.UTF8.GetBytes(keys.PrivateKey ?? "QRQueue-checkin-fallback");
+                key = System.Text.Encoding.UTF8.GetBytes(GetOrCreateStoredSecretAsync().GetAwaiter().GetResult());
             }
             cachedKey = key;
             return key;
         }
+
+        /// <summary>自動生成シークレットの保存先(配布物の外に出す場合は設定で変更する)</summary>
+        private string SecretFilePath => configuration["Checkin:SecretFilePath"] ?? "checkin_secret.json";
+
+        private async Task<string> GetOrCreateStoredSecretAsync()
+        {
+            lock (SecretFileLock)
+            {
+                var path = SecretFilePath;
+                if (System.IO.File.Exists(path))
+                {
+                    var stored = System.Text.Json.JsonSerializer.Deserialize<StoredSecret>(
+                        System.IO.File.ReadAllText(path));
+                    if (!string.IsNullOrEmpty(stored?.Secret))
+                    {
+                        return stored.Secret;
+                    }
+                }
+
+                // 初回生成。VAPID 鍵が既に存在する場合はその秘密鍵を引き継ぐことで、
+                // フォールバック時代に導出されたコード(=印刷済みQR)との互換を維持する。
+                // 新規環境では VAPID 鍵もこのタイミングで作成され、秘密鍵がそのまま使われる。
+                var seed = vapidService.GetOrCreateKeysAsync().GetAwaiter().GetResult().PrivateKey;
+                var secret = string.IsNullOrEmpty(seed)
+                    ? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+                    : seed;
+
+                var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                System.IO.File.WriteAllText(path,
+                    System.Text.Json.JsonSerializer.Serialize(new StoredSecret(secret)));
+                return secret;
+            }
+        }
+
+        private record StoredSecret(string Secret);
 
         public async Task<string> GetCurrentCheckinCodeAsync(Guid eventDisplayId)
         {
@@ -77,6 +125,25 @@ namespace QRQueue.Services
                 }
             }
             return false;
+        }
+
+        /// <summary>診断用: シークレットを新しいランダム値で再生成する(RotateSecretAsync を参照)</summary>
+        public Task RotateSecretAsync()
+        {
+            lock (SecretFileLock)
+            {
+                var secret = Convert.ToBase64String(
+                    System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+                var dir = Path.GetDirectoryName(Path.GetFullPath(SecretFilePath));
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                System.IO.File.WriteAllText(SecretFilePath,
+                    System.Text.Json.JsonSerializer.Serialize(new StoredSecret(secret)));
+                cachedKey = null;
+            }
+            return Task.CompletedTask;
         }
 
         private static long CurrentWindow()
