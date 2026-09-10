@@ -73,20 +73,24 @@ export default function Publishing({ model }: { model: Model }) {
                     </section>
 
                     <section class="publishing-card">
-                        <h2>チェックインQR</h2>
+                        <h2>チェックインQR(自動更新表示)</h2>
                         <p class="publishing-desc">
-                            受付に掲示。呼び出されたグループの<strong>代表者</strong>が読み取ると受付が確定します。
-                            このQRには<strong>到着確認コード</strong>が含まれており、受付掲示QRからのみ
-                            チェックインが完了します(issue #68)。
+                            受付に設置したタブレット等で表示します。呼び出されたグループの<strong>代表者</strong>が
+                            読み取ると受付が確定します(§4.6)。
+                            QRには<strong>30秒で回転する到着確認コード</strong>が含まれており、受付掲示QRからのみ
+                            チェックインが完了します(issue #68)。撮影・共有された古いQRは使用できません(issue #76)。
                             チェックインしても次のグループは自動で呼び出されません。次の呼び出しは
                             呼び出しコンソールの「次を呼ぶ」から行ってください(issue #70)。
                         </p>
-                        <button
+                        <a
                             class="btn-primary"
-                            onClick={() => download(`/api/pdf/checkin/${model.eventId}`, "チェックインQR.pdf")}
+                            style={{ textDecoration: "none", display: "inline-block", padding: "0.6rem 1.2rem" }}
+                            href={`/checkin-qr/${model.eventId}`}
+                            target="_blank"
+                            rel="noopener"
                         >
-                            A4掲示PDFを発行
-                        </button>
+                            受付確認QR画面を開く
+                        </a>
                     </section>
                 </div>
             </div>

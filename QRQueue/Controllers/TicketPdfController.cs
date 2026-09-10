@@ -10,18 +10,15 @@ public class TicketPdfController : ControllerBase
     private readonly IEventRepository _eventRepository;
     private readonly IBaseUrlResolver _baseUrlResolver;
     private readonly ITicketPdfGenerator _pdfGenerator;
-    private readonly ICheckinCodeService _checkinCodeService;
 
     public TicketPdfController(
         IEventRepository eventRepository,
         IBaseUrlResolver baseUrlResolver,
-        ITicketPdfGenerator pdfGenerator,
-        ICheckinCodeService checkinCodeService)
+        ITicketPdfGenerator pdfGenerator)
     {
         _eventRepository = eventRepository;
         _baseUrlResolver = baseUrlResolver;
         _pdfGenerator = pdfGenerator;
-        _checkinCodeService = checkinCodeService;
     }
 
     /// <summary>
@@ -41,23 +38,7 @@ public class TicketPdfController : ControllerBase
         return File(bytes, "application/pdf", $"参加登録QR_{ev.Name}.pdf");
     }
 
-    /// <summary>
-    /// チェックインQRの掲示用PDF(A4・1QR、設計§8/§4.6)。受付に掲示し、
-    /// 呼び出し中グループの代表者が読み取ることで受付が確定する。
-    /// 読み取り先は {base}/checkin/{eventDisplayId}?rc={到着確認コード}(issue #68)。
-    /// 確認コード付きの受付掲示QRからのみチェックインが完了する。
-    /// </summary>
-    [Authorize(Policy = "TicketPublish")]
-    [HttpGet("checkin/{eventDisplayId}")]
-    public async Task<IActionResult> CheckinQrPoster(Guid eventDisplayId)
-    {
-        var ev = await _eventRepository.FindByDisplayIdAsync(eventDisplayId);
-        if (ev == null)
-            return NotFound("イベントが見つかりません");
-
-        var checkinCode = await _checkinCodeService.GetCheckinCodeAsync(eventDisplayId);
-        var url = $"{_baseUrlResolver.Resolve(Request)}/checkin/{eventDisplayId}?rc={checkinCode}";
-        var bytes = _pdfGenerator.GenerateQrPosterPdf(ev.Name, "チェックインQR", url, "そろったグループは代表者が受付で読み取ってください");
-        return File(bytes, "application/pdf", $"チェックインQR_{ev.Name}.pdf");
-    }
+    // issue #76: 固定のチェックインQR掲示PDFは廃止。
+    // 到着確認コードは30秒で回転するため、印刷した固定QRは共有・再利用対策にならない。
+    // 代わりに受付画面 /checkin-qr/{eventDisplayId} で自動更新QRを表示する。
 }
