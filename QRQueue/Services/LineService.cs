@@ -109,17 +109,26 @@ namespace QRQueue.Services
 
         private sealed record TokenResponse(string? AccessToken, string? IdToken);
 
-        public async Task<Guid?> ResolveBindingAsync(string code, string state)
+        public async Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state)
         {
+            // FailureReason は電子券画面に ?line=error&reason=... で渡す短いコード。
+            // スマホ等デベロッパーツールを使えない環境でも原因を画面で分かるようにするため
             if (IsConfigured == false)
             {
                 logger.LogWarning("LINE callback: LINE連携設定が未完成のため失敗(ChannelAccessToken/ClientId/ClientSecret/RedirectUri を確認)");
-                return null;
+                return (null, "config");
             }
             if (!TryParseState(state, out var ticketDisplayId, out var stateFailure))
             {
                 logger.LogWarning("LINE callback: state検証に失敗({Reason})。state先頭={StateHead}", stateFailure, state.Length > 13 ? state[..13] : state);
-                return null;
+                // 原因の種類を画面に渡せるよう細分化する
+                var stateCode = stateFailure switch
+                {
+                    "state署名不一致" => "sign",
+                    "state有効期限切れ(発行から30分超過)" => "expired",
+                    _ => "state",
+                };
+                return (null, stateCode);
             }
 
             try
@@ -139,7 +148,7 @@ namespace QRQueue.Services
                 if (!res.IsSuccessStatusCode)
                 {
                     logger.LogWarning("LINE token交換失敗 ({Status}): {Body}", (int)res.StatusCode, body);
-                    return null;
+                    return (null, "token");
                 }
 
                 var token = JsonSerializer.Deserialize<TokenResponse>(body,
@@ -148,26 +157,26 @@ namespace QRQueue.Services
                 if (string.IsNullOrEmpty(lineUserId))
                 {
                     logger.LogWarning("LINE id_token から sub を取得できませんでした");
-                    return null;
+                    return (null, "idtoken");
                 }
 
                 var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
                 if (ticket == null)
                 {
                     logger.LogWarning("LINE callback: チケットが見つからない ({TicketId})", ticketDisplayId);
-                    return null;
+                    return (null, "ticket");
                 }
                 ticket.LineUserId = lineUserId;
                 await db.SaveChangesAsync();
 
                 await SendNotifyAsync([ticketDisplayId],
                     "QRQueueの呼び出し通知を設定しました。\n順番が来るとこのトークに通知が届きます。");
-                return ticketDisplayId;
+                return (ticketDisplayId, null);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "LINE連携処理でエラー");
-                return null;
+                return (null, "exception");
             }
         }
 

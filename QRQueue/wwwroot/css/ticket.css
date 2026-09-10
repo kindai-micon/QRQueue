@@ -186,3 +186,17 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
     padding: 0.6rem 0.9rem; border: 1px dashed #ffcc80; border-radius: 8px;
     background-color: #fff8f0; text-align: left;
 }
+/* テスト通知の診断結果ボックス(画面上で原因を確認・共有できるようにする) */
+.line-debug-box {
+    width: 100%; max-width: 450px; box-sizing: border-box; margin: 0.75rem auto 0;
+    padding: 0.75rem 0.9rem; border: 1px solid #cfd8dc; border-radius: 8px;
+    background-color: #fafafa; text-align: left; font-size: 0.8rem;
+}
+.line-debug-title { font-weight: bold; margin-bottom: 0.5rem; color: #37474f; }
+.line-debug-row {
+    display: flex; gap: 0.5rem; padding: 0.2rem 0;
+    border-top: 1px dotted #cfd8dc; align-items: flex-start;
+}
+.line-debug-label { flex: 0 0 8.5em; color: #78909c; }
+.line-debug-value { flex: 1; word-break: break-all; color: #37474f; }
+.line-debug-note { margin-top: 0.5rem; color: #90a4ae; font-size: 0.75rem; }

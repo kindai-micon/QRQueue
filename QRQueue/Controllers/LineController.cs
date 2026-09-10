@@ -33,20 +33,23 @@ namespace QRQueue.Controllers
         [HttpGet("callback")]
         public async Task<IActionResult> Callback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
         {
-            var ticketId = (error == null && code != null && state != null)
+            // 失敗原因コード(reason)を電子券画面に渡す。スマホ等でデベロッパーツールを
+            // 使えない環境でも、画面表示だけで原因を切り分けられるようにするため
+            var (ticketId, failureReason) = (error == null && code != null && state != null)
                 ? await lineService.ResolveBindingAsync(code, state)
-                : null;
+                : (null, error != null ? "cancelled" : "invalid_request");
 
             if (ticketId != null)
             {
                 return Redirect($"/ticket/{ticketId}?line=linked");
             }
 
+            var reasonParam = Uri.EscapeDataString(failureReason ?? "unknown");
             // state からチケットIDが復元できるなら、エラーメッセージ付きで電子券ページへ戻す
             var fallbackTicketId = state != null ? lineService.ExtractTicketIdFromState(state) : null;
             if (fallbackTicketId != null)
             {
-                return Redirect($"/ticket/{fallbackTicketId}?line=error");
+                return Redirect($"/ticket/{fallbackTicketId}?line=error&reason={reasonParam}");
             }
 
             // state も復元できない場合は参加者cookie(participantToken)から戻り先を特定する。
@@ -58,7 +61,7 @@ namespace QRQueue.Controllers
                 var active = await tickets.FindAllActiveByParticipantTokenAsync(participantToken);
                 if (active.Count == 1)
                 {
-                    return Redirect($"/ticket/{active[0].DisplayId}?line=error");
+                    return Redirect($"/ticket/{active[0].DisplayId}?line=error&reason={reasonParam}");
                 }
             }
             return Redirect("/");

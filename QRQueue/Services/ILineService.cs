@@ -9,8 +9,9 @@ namespace QRQueue.Services
         string BuildAuthorizeUrl(Guid ticketDisplayId);
 
         /// <summary>コールバックの code/state を検証してチケットに LineUserId を紐付け、
-        /// 紐付けたチケットのDisplayIdを返す(失敗時 null)</summary>
-        Task<Guid?> ResolveBindingAsync(string code, string state);
+        /// 紐付いたチケットのDisplayIdを返す。失敗時は TicketDisplayId=null とともに
+        /// FailureReason(画面表示用の短い原因コード)を返す</summary>
+        Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state);
 
         /// <summary>state(署名付きトークン)からチケットDisplayIdだけを緩く取り出す。
         /// 連携失敗時でも電子券ページへユーザーを戻すために使う(署名・期限の検証はしない)。
