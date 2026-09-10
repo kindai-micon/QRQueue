@@ -14,6 +14,8 @@ export default function Index({ model }: { model: Model }) {
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
+    // notice の種別(成功=緑/失敗=赤)。既定は赤(従来のエラー表示と同じ)
+    const [noticeKind, setNoticeKind] = useState<"error" | "success">("error");
     const [lineLinked, setLineLinked] = useState(false);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
     const [transferCode, setTransferCode] = useState<string | null>(null);
@@ -95,7 +97,14 @@ export default function Index({ model }: { model: Model }) {
     useEffect(() => {
         // LINE連携のコールバックで戻ってきた場合の完了表示(URLからはパラメータを消しておく)
         if (new URLSearchParams(window.location.search).get("line") === "linked") {
-            setNotice("LINE連携が完了しました。順番が来るとLINEにも通知が届きます");
+            setNotice("✅ LINE連携が完了しました。順番が来るとLINEにも通知が届きます(連携先のトークに確認メッセージを送りました)");
+            setNoticeKind("success");
+            window.history.replaceState(null, "", window.location.pathname);
+        }
+        // LINE連携が失敗した場合もログイン画面などへは飛ばされず、この画面に戻される
+        if (new URLSearchParams(window.location.search).get("line") === "error") {
+            setNotice("❌ LINE連携に失敗しました。お手数ですが、もう一度お試しください");
+            setNoticeKind("error");
             window.history.replaceState(null, "", window.location.pathname);
         }
         try {
@@ -321,6 +330,7 @@ export default function Index({ model }: { model: Model }) {
             }
             setLineLinked(false);
             setNotice("LINE連携を解除しました");
+            setNoticeKind("success");
         } catch (error) {
             console.error("LINE連携の解除に失敗:", error);
         }
@@ -425,7 +435,9 @@ export default function Index({ model }: { model: Model }) {
                                 テスト通知
                             </button>
                         </div>
-                        {notice && <div class="notification-notice">{notice}</div>}
+                        {notice && (
+                            <div class={`notification-notice ${noticeKind === "success" ? "notice-success" : ""}`}>{notice}</div>
+                        )}
 
                         <div class="line-actions">
                             {lineLinked ? (

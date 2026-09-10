@@ -48,13 +48,17 @@ namespace QRQueue.Services
         }
 
         /// <summary>stateを検証してチケットDisplayIdを復元する(有効期限10分)</summary>
-        private bool TryParseState(string state, out Guid ticketDisplayId)
+        /// <summary>stateを検証してチケットDisplayIdを復元する。有効期限30分。
+        /// 失敗時は failureReason に原因(state不正/署名不一致/期限切れ)を返す</summary>
+        private bool TryParseState(string state, out Guid ticketDisplayId, out string? failureReason)
         {
             ticketDisplayId = default;
+            failureReason = null;
             var parts = state.Split('.');
             if (parts.Length != 3 || !Guid.TryParseExact(parts[0], "N", out ticketDisplayId)
                 || !long.TryParse(parts[1], out var issuedAt))
             {
+                failureReason = "state形式不正";
                 return false;
             }
             var payload = $"{parts[0]}.{parts[1]}";
@@ -62,10 +66,26 @@ namespace QRQueue.Services
                     Encoding.UTF8.GetBytes(SignStatePayload(payload)),
                     Encoding.UTF8.GetBytes(parts[2])))
             {
+                failureReason = "state署名不一致";
                 return false;
             }
-            // リプレイ対策の緩和策として発行から10分のみ有効
-            return DateTimeOffset.UtcNow.ToUnixTimeSeconds() - issuedAt <= 600;
+            // リプレイ対策として発行から30分のみ有効。LINE Login の入力待ちで
+            // 10分だと失効して連携が失敗し、ユーザー体験を損なうため余裕を持たせる
+            if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - issuedAt > 1800)
+            {
+                failureReason = "state有効期限切れ(発行から30分超過)";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>state(署名付きトークン)からチケットDisplayIdだけを緩く取り出す。
+        /// 連携失敗時でも電子券ページへユーザーを戻すために使う(署名・期限の検証はしない)。
+        /// チケットDisplayIdは電子券ページのURL自体に使われているため、取り出しても秘匿性の低下はない</summary>
+        public Guid? ExtractTicketIdFromState(string state)
+        {
+            var parts = state?.Split('.');
+            return parts is { Length: 3 } && Guid.TryParseExact(parts[0], "N", out var id) ? id : null;
         }
 
         public string BuildAuthorizeUrl(Guid ticketDisplayId)
@@ -91,9 +111,14 @@ namespace QRQueue.Services
 
         public async Task<Guid?> ResolveBindingAsync(string code, string state)
         {
-            if (IsConfigured == false || !TryParseState(state, out var ticketDisplayId))
+            if (IsConfigured == false)
             {
-                logger.LogWarning("LINE callback: state検証に失敗");
+                logger.LogWarning("LINE callback: LINE連携設定が未完成のため失敗(ChannelAccessToken/ClientId/ClientSecret/RedirectUri を確認)");
+                return null;
+            }
+            if (!TryParseState(state, out var ticketDisplayId, out var stateFailure))
+            {
+                logger.LogWarning("LINE callback: state検証に失敗({Reason})。state先頭={StateHead}", stateFailure, state.Length > 13 ? state[..13] : state);
                 return null;
             }
 
@@ -221,6 +246,69 @@ namespace QRQueue.Services
                 .Where(t => t.DisplayId == ticketDisplayId)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.LineUserId, (string?)null));
             return count > 0;
+        }
+
+        // ===== 診断(一時的な診断用エンドポイント向け。シークレットは返さない) =====
+
+        public async Task<Dictionary<string, object?>> DiagnoseAsync()
+        {
+            var result = new Dictionary<string, object?>
+            {
+                ["channelAccessTokenSet"] = !string.IsNullOrEmpty(ChannelAccessToken),
+                ["loginClientId"] = LoginClientId, // クライアントIDは公開値なのでそのまま返す(LINEコンソールとの照合用)
+                ["loginClientSecretSet"] = !string.IsNullOrEmpty(LoginClientSecret),
+                ["redirectUri"] = RedirectUri, // LINE Developers コンソールのコールバックURLと照合する用
+            };
+
+            // state 署名の自己検証(BuildAuthorizeUrl → 検証の往復が通るか)
+            if (LoginClientSecret == null)
+            {
+                result["stateSelfTest"] = new { ok = false, error = "LoginClientSecret 未設定のため署名検証不可" };
+            }
+            else
+            {
+                var url = BuildAuthorizeUrl(Guid.NewGuid());
+                var state = Uri.UnescapeDataString(url.Split("state=")[1].Split('&')[0]);
+                result["stateSelfTest"] = new { ok = TryParseState(state, out _, out var reason), reason };
+            }
+
+            // ChannelAccessToken の有効性(Messaging API bot info)
+            if (ChannelAccessToken == null)
+            {
+                result["botInfoTest"] = new { ok = false, error = "ChannelAccessToken 未設定" };
+            }
+            else
+            {
+                try
+                {
+                    var client = httpClientFactory.CreateClient();
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.line.me/v2/bot/info");
+                    request.Headers.Authorization = new("Bearer", ChannelAccessToken);
+                    var res = await client.SendAsync(request);
+                    var body = await res.Content.ReadAsStringAsync();
+                    result["botInfoTest"] = res.IsSuccessStatusCode
+                        ? new { ok = true }
+                        : new
+                        {
+                            ok = false,
+                            status = (int)res.StatusCode,
+                            error = body,
+                            hint = (int)res.StatusCode == 401
+                                ? "ChannelAccessToken が無効・期限切れです。LINE Developers で再発行して appsettings.json を更新してください"
+                                : "Messaging API の応答がエラーです。チャネル設定を確認してください",
+                        };
+                }
+                catch (Exception ex)
+                {
+                    result["botInfoTest"] = new { ok = false, error = $"{ex.GetType().Name}: {ex.Message}" };
+                }
+            }
+
+            // RedirectUri が https か(LINE は本番で https を要求)
+            result["redirectUriIsHttps"] = RedirectUri?.StartsWith("https://") == true;
+
+            return result;
         }
     }
 }

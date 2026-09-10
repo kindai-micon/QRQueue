@@ -25,6 +25,13 @@ namespace QRQueue.Repositories
         Task<bool> HasActiveTicketAsync(Guid participantToken);
 
         /// <summary>
+        /// participantToken に一致する有効なチケットを全イベントから取得。
+        /// LINE連携コールバックの失敗時、state復元できない場合に参加者cookieから
+        /// 戻り先の電子券を特定するために使用する。
+        /// </summary>
+        Task<List<Ticket>> FindAllActiveByParticipantTokenAsync(Guid participantToken);
+
+        /// <summary>
         /// 引き継ぎコードのハッシュに一致する有効なチケットを取得(issue #75)。
         /// 未期限かつ使用済み(ハッシュ未クリア)のコードにのみ一致する。
         /// </summary>
