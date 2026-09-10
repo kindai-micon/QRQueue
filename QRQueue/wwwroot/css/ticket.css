@@ -174,3 +174,15 @@ body { margin: 0; padding: 0; background-color: #f5f5f5; }
     border: 1px solid #cfd8dc; background-color: #ffffff; color: #546e7a;
     font-size: 0.85rem; padding: 0.4rem 0.9rem; border-radius: 999px; cursor: pointer;
 }
+.line-test-btn {
+    border: 1px solid #06C755; background-color: #ffffff; color: #06C755;
+    font-size: 0.85rem; padding: 0.4rem 0.9rem; border-radius: 999px; cursor: pointer;
+}
+.line-test-btn:disabled { opacity: 0.6; cursor: default; }
+.line-test-btn:active:not(:disabled) { transform: scale(0.95); }
+/* サーバー側のLINE設定が未完成のときの案内(デバッグ情報) */
+.line-disabled-label {
+    font-size: 0.85rem; color: #b26a00; line-height: 1.6;
+    padding: 0.6rem 0.9rem; border: 1px dashed #ffcc80; border-radius: 8px;
+    background-color: #fff8f0; text-align: left;
+}

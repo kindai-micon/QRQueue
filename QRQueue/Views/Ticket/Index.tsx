@@ -17,6 +17,9 @@ export default function Index({ model }: { model: Model }) {
     // notice の種別(成功=緑/失敗=赤)。既定は赤(従来のエラー表示と同じ)
     const [noticeKind, setNoticeKind] = useState<"error" | "success">("error");
     const [lineLinked, setLineLinked] = useState(false);
+    // LINE通知のデバッグ用: サーバー側のLINE設定が有効か(未設定なら連携ボタンを出さず無効旨を表示)
+    const [lineConfigured, setLineConfigured] = useState<boolean | null>(null);
+    const [lineTestSending, setLineTestSending] = useState(false);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
     const [transferCode, setTransferCode] = useState<string | null>(null);
     const [transferring, setTransferring] = useState(false);
@@ -320,6 +323,55 @@ export default function Index({ model }: { model: Model }) {
         }
     }
 
+    // サーバー側のLINE設定とこのチケットの連携状態を取得する(デバッグ用)。
+    // 設定未完了の環境では連携ボタンを無効化して利用者に分かるようにする
+    async function loadLineStatus() {
+        try {
+            const res = await fetch(`/api/line/status/${model.ticketId}`);
+            if (!res.ok) {
+                console.error("LINE連携状態の取得に失敗:", res.status, await readErrorMessage(res));
+                return;
+            }
+            const data: { configured: boolean; lineLinked: boolean } = await res.json();
+            setLineConfigured(data.configured);
+            if (data.lineLinked) {
+                setLineLinked(true);
+            }
+        } catch (error) {
+            console.error("LINE連携状態の取得に失敗:", error);
+        }
+    }
+
+    // 実際にLINEへテスト通知を送って結果を診断する。
+    // ok=false の場合、reason(利用者向けの原因説明)/ pushStatus / error(LINE APIの応答)を表示する
+    async function sendLineTestNotification() {
+        setNotice(null);
+        setLineTestSending(true);
+        try {
+            const res = await fetch(`/api/line/test/${model.ticketId}`, { method: "POST" });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.ok) {
+                setNotice(`✅ ${data.message ?? "テスト通知を送信しました"}`);
+                setNoticeKind("success");
+            } else {
+                // デバッグに役立つ順に: 利用者向けの原因 → HTTPステータス → LINE APIの応答本文
+                const detail = [
+                    data?.reason,
+                    data?.pushStatus ? `HTTP ${data.pushStatus}` : null,
+                    data?.error,
+                ].filter(Boolean).join(" / ");
+                setNotice(`❌ LINEテスト通知に失敗: ${detail || `HTTP ${res.status}`}`);
+                setNoticeKind("error");
+                console.error("LINEテスト通知の結果:", data ?? res.status);
+            }
+        } catch (error) {
+            console.error("LINEテスト通知の送信に失敗:", error);
+            setNotice("❌ LINEテスト通知の送信に失敗しました(通信エラー)");
+        } finally {
+            setLineTestSending(false);
+        }
+    }
+
     // LINE連携の解除
     async function unlinkLine() {
         try {
@@ -355,6 +407,7 @@ export default function Index({ model }: { model: Model }) {
                 if (disposed) return;
                 setTicketData(data);
                 setLineLinked(data.lineLinked ?? false);
+                await loadLineStatus();
 
                 // チケットのイベントが確定したら SignalR グループへ参加
                 if (data.eventId && data.eventId !== joinedEventId && connection?.state === "Connected") {
@@ -443,8 +496,22 @@ export default function Index({ model }: { model: Model }) {
                             {lineLinked ? (
                                 <>
                                     <div class="line-linked-label">LINE通知 連携済み</div>
+                                    {/* テスト通知: 実際にLINEへ送り、失敗原因(友だち未追加/トークン無効等)を表示する */}
+                                    <button
+                                        class="line-test-btn"
+                                        onClick={sendLineTestNotification}
+                                        disabled={lineTestSending}
+                                    >
+                                        {lineTestSending ? "送信中..." : "テスト通知"}
+                                    </button>
                                     <button class="line-unlink-btn" onClick={unlinkLine}>解除</button>
                                 </>
+                            ) : lineConfigured === false ? (
+                                // サーバー側でLINE設定が未完了: 押しても動かないボタンより、無効である旨を明示する
+                                <div class="line-disabled-label">
+                                    ⚠️ LINE通知は現在サーバー側で無効です(管理者の設定待ち)。
+                                    ブラウザの「呼び出し通知」はご利用いただけます
+                                </div>
                             ) : (
                                 <a class="line-btn" href={`/api/line/authorize/${model.ticketId}`}>
                                     LINEで通知を受け取る

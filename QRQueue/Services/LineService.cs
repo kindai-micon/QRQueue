@@ -248,6 +248,75 @@ namespace QRQueue.Services
             return count > 0;
         }
 
+        // ===== テスト通知(電子券ページのデバッグ用) =====
+
+        /// <summary>チケット1件宛にテスト通知を実際に送り、結果を診断情報として返す。
+        /// 通常の SendNotifyAsync は失敗してもログのみで黙るため、利用者側から原因を
+        /// 切り分けられるよう、LINE API の応答コードと内容をそのまま返す(シークレットは返さない)</summary>
+        public async Task<Dictionary<string, object?>> SendTestNotifyAsync(Guid ticketDisplayId)
+        {
+            var result = new Dictionary<string, object?> { ["configured"] = IsConfigured };
+            if (!IsConfigured)
+            {
+                result["ok"] = false;
+                result["reason"] = "サーバー側のLINE設定が未完了です(ChannelAccessToken / LoginClientId / LoginClientSecret / RedirectUri)。管理者に連絡してください";
+                return result;
+            }
+
+            var lineUserId = await db.Tickets
+                .Where(t => t.DisplayId == ticketDisplayId)
+                .Select(t => t.LineUserId)
+                .FirstOrDefaultAsync();
+            result["lineLinked"] = lineUserId != null;
+            if (lineUserId == null)
+            {
+                result["ok"] = false;
+                result["reason"] = "このチケットはまだLINE連携されていません。「LINEで通知を受け取る」から連携してください";
+                return result;
+            }
+
+            try
+            {
+                var client = httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
+                using var request = new HttpRequestMessage(HttpMethod.Post,
+                    "https://api.line.me/v2/bot/message/push");
+                request.Headers.Authorization = new("Bearer", ChannelAccessToken);
+                request.Content = new StringContent(
+                    JsonSerializer.Serialize(new
+                    {
+                        to = lineUserId,
+                        messages = new[] { new { type = "text", text = "🔔 テスト通知です。QRQueueの呼び出し通知は正常に設定されています。" } }
+                    }),
+                    Encoding.UTF8, "application/json");
+                var res = await client.SendAsync(request);
+                var body = await res.Content.ReadAsStringAsync();
+                result["pushStatus"] = (int)res.StatusCode;
+                if (res.IsSuccessStatusCode)
+                {
+                    result["ok"] = true;
+                    result["message"] = "テスト通知を送信しました。LINEに届かない場合は公式アカウントの友だち追加が解除されていないか確認してください";
+                }
+                else
+                {
+                    result["ok"] = false;
+                    result["error"] = body;
+                    result["reason"] = (int)res.StatusCode == 400
+                        ? "LINEへの送信が拒否されました(400)。公式アカウントの友だち追加が解除されていないか確認してください"
+                        : (int)res.StatusCode == 401
+                            ? "ChannelAccessToken が無効・期限切れです(401)。管理者はLINE Developersで再発行してください"
+                            : "LINE Messaging API がエラーを返しました";
+                }
+            }
+            catch (Exception ex)
+            {
+                result["ok"] = false;
+                result["reason"] = "LINE APIへの接続に失敗しました(ネットワークエラー/タイムアウト)";
+                result["error"] = $"{ex.GetType().Name}: {ex.Message}";
+            }
+            return result;
+        }
+
         // ===== 診断(一時的な診断用エンドポイント向け。シークレットは返さない) =====
 
         public async Task<Dictionary<string, object?>> DiagnoseAsync()

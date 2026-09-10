@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using QRQueue.Models;
 using QRQueue.Models.API;
@@ -72,6 +73,31 @@ namespace QRQueue.Controllers
                 return NotFound(new ApiMessage("チケットが見つかりません"));
             }
             return Ok(new ApiMessage("LINE連携を解除しました"));
+        }
+
+        // 電子券ページ向け: このチケットのLINE連携の現状(サーバー設定済みか/連携済みか)。
+        // 設定未完了の環境で「押しても動かない連携ボタン」を出さず、利用者に無効である旨を
+        // 伝えて切り分けられるようにするためのデバッグ情報(シークレットは返さない)
+        [HttpGet("status/{guid}")]
+        public async Task<IActionResult> Status([FromRoute] Guid guid)
+        {
+            var lineLinked = await db.Tickets
+                .Where(t => t.DisplayId == guid)
+                .Select(t => t.LineUserId != null)
+                .FirstOrDefaultAsync();
+            return Ok(new
+            {
+                configured = lineService.IsConfigured,
+                lineLinked = lineLinked,
+            });
+        }
+
+        // 電子券ページ向け: 実際にLINEへテスト通知を送って結果を診断する。
+        // 友だち追加の解除・トークン無効・サーバー設定漏れなどを、利用者の手元で切り分けられる
+        [HttpPost("test/{guid}")]
+        public async Task<IActionResult> Test([FromRoute] Guid guid)
+        {
+            return Ok(await lineService.SendTestNotifyAsync(guid));
         }
     }
 }

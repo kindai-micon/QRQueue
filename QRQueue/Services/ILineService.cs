@@ -23,6 +23,10 @@ namespace QRQueue.Services
         /// <summary>チケットのLINE連携を解除する</summary>
         Task<bool> UnlinkAsync(Guid ticketDisplayId);
 
+        /// <summary>チケット1件宛にテスト通知を実際に送り、結果を診断情報として返す。
+        /// 電子券ページのデバッグ用で、シークレットは返さず原因(設定未完了/未連携/友だち未追加/トークン無効)を返す</summary>
+        Task<Dictionary<string, object?>> SendTestNotifyAsync(Guid ticketDisplayId);
+
         /// <summary>LINE連携の設定・資格情報を診断する(一時的な診断用エンドポイント向け)。
         /// シークレットそのものは返さず、設定済みかどうかと検証結果を返す</summary>
         Task<Dictionary<string, object?>> DiagnoseAsync();
