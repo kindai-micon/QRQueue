@@ -41,6 +41,7 @@ export type EventInfoView = {
     status: EventStatus;
     isOpen: boolean;
     maxGroupSize: number;
+    autoNextEnabled: boolean;
 };
 
 // POST /api/entry/join と /api/entry/group/join のレスポンス(JoinResult)

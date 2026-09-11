@@ -194,6 +194,24 @@ export default function Call({ model }: { model: Model }) {
                     >
                         受付終了
                     </button>
+                    <button
+                        class={`${ev?.autoNextEnabled ? "btn-primary" : "btn-secondary"} btn-sm`}
+                        disabled={busy}
+                        onClick={() => {
+                            const next = !(ev?.autoNextEnabled ?? true);
+                            action(
+                                next ? "autonext-on" : "autonext-off",
+                                () => fetch(`/api/call/autonext/${model.eventId}`, {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ enabled: next }),
+                                }),
+                                next ? "自動呼出しをオンにしました" : "自動呼出しをオフにしました",
+                            );
+                        }}
+                    >
+                        自動呼出し: {ev?.autoNextEnabled ? "ON" : "OFF"}
+                    </button>
                 </div>
 
                 <div class="call-actions">
@@ -214,8 +232,8 @@ export default function Call({ model }: { model: Model }) {
                 </div>
                 <p class="call-hint">
                     「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します。
-                    チェックインしても次のグループは自動で呼び出されないため、前のグループのゲーム終了時に
-                    「次を呼ぶ」で呼び出してください(issue #70)。
+                    自動呼出しが ON の場合、チェックイン完了時や呼び出し中が空いた状態で新しいチケットが発行されたときに
+                    次のグループが自動で呼び出されます。OFF の場合は「次を呼ぶ」で呼び出してください。
                     チェックインした時点でチケットは自動的に使用済みになります。
                 </p>
 
@@ -224,7 +242,7 @@ export default function Call({ model }: { model: Model }) {
 
                 <div class="call-panels">
                     <section class="call-panel">
-                        <h2>ゲーム参加枠の到着状況(issue #69)</h2>
+                        <h2>ゲーム参加枠の到着状況</h2>
                         {(queue?.slots?.length ?? 0) === 0 ? (
                             <p class="call-pool" style={{ fontSize: "0.9rem", color: "#888" }}>処理中の枠はありません</p>
                         ) : (
