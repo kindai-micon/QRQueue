@@ -59,6 +59,10 @@ namespace QRQueue.Controllers
         [HttpGet("/checkin-qr/{eventid}")]
         public IActionResult CheckinQr(string eventid) => Page("Event/CheckinQr", new { eventId = eventid });
 
+        // 参加登録QRの掲示表示(固定QR)
+        [HttpGet("/entry-qr/{eventid}")]
+        public IActionResult EntryQr(string eventid) => Page("Event/EntryQr", new { eventId = eventid });
+
         [HttpGet("/ticket/{ticketid}")]
         public IActionResult Ticket(string ticketid) => Page("Ticket/Index", new { ticketId = ticketid });
 

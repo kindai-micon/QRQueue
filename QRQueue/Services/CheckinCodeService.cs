@@ -11,6 +11,13 @@ namespace QRQueue.Services
         /// <summary>現在の到着確認コードを取得する(受付確認QRのURLに埋め込む)</summary>
         Task<string> GetCurrentCheckinCodeAsync(Guid eventDisplayId);
 
+        /// <summary>
+        /// 固定掲示用チェックインQRのURLに埋め込むコードを取得する。
+        /// 印刷した固定QR(撮影・共有・再利用が可能)を許容する運用向け。
+        /// 回転コードとは異なり失効しないため、発行は受付担当者の責任で行うこと。
+        /// </summary>
+        Task<string> GetStaticPosterCodeAsync(Guid eventDisplayId);
+
         /// <summary>到着確認コードが正しいか検証する(直前ウィンドウの許容を含む)</summary>
         Task<bool> IsValidAsync(Guid eventDisplayId, string? code);
 
@@ -102,6 +109,15 @@ namespace QRQueue.Services
             return Compute(await GetKeyAsync(), eventDisplayId, CurrentWindow());
         }
 
+        // 固定掲示用コードの導出に使うウィンドウ値。
+        // 回転ウィンドウは UNIX時間/30 の正値しか取らないため、負値を使えば衝突しない。
+        private const long StaticPosterWindow = -1;
+
+        public async Task<string> GetStaticPosterCodeAsync(Guid eventDisplayId)
+        {
+            return Compute(await GetKeyAsync(), eventDisplayId, StaticPosterWindow);
+        }
+
         public async Task<bool> IsValidAsync(Guid eventDisplayId, string? code)
         {
             if (string.IsNullOrWhiteSpace(code))
@@ -111,6 +127,18 @@ namespace QRQueue.Services
 
             var key = await GetKeyAsync();
 
+            var trimmed = System.Text.Encoding.UTF8.GetBytes(code.Trim());
+
+            // 固定掲示用QR(印刷物)のコードも許容する。
+            // 印刷した固定QRは失効しないため、撮影・共有されたURLは再利用可能になる。
+            // この運用を許容するかどうかは掲示PDFの発行判断に委ねられる(併存方式)。
+            var staticPoster = System.Text.Encoding.UTF8.GetBytes(
+                Compute(key, eventDisplayId, StaticPosterWindow));
+            if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(trimmed, staticPoster))
+            {
+                return true;
+            }
+
             // 現在ウィンドウと直前ウィンドウを許容(QR更新タイミング・時計ずれの吸収)。
             // それより古いコードは拒否されるため、撮影・共有されたQRの再利用は制限される。
             var current = CurrentWindow();
@@ -118,7 +146,7 @@ namespace QRQueue.Services
             {
                 var expected = Compute(key, eventDisplayId, window);
                 if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                    System.Text.Encoding.UTF8.GetBytes(code.Trim()),
+                    trimmed,
                     System.Text.Encoding.UTF8.GetBytes(expected)))
                 {
                     return true;

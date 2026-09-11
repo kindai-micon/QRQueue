@@ -37,7 +37,7 @@ namespace QRQueue.Controllers
         /// <summary>1グループの最大参加人数(設計§4)</summary>
         private const int MaxGroupSize = 3;
 
-        public record JoinRequest(Guid EventDisplayId, string Mode, bool Overwrite);
+        public record JoinRequest(Guid EventDisplayId, string Mode, bool Overwrite, string? ReceptionCode);
         public record EventRequest(Guid EventDisplayId);
         public record GroupJoinRequest(string JoinToken);
         public record CheckinRequest(Guid EventDisplayId, string? ReceptionCode);
@@ -78,6 +78,15 @@ namespace QRQueue.Controllers
             if (ev.Status != EventStatus.Open)
             {
                 return Conflict(new ApiMessage("受付中ではありません"));
+            }
+
+            // 受付確認用QRと同じ到着確認コード検証(issue #68 方式の転用)。
+            // Web掲示画面(/entry-qr)は30秒で回転するコード、印刷PDFは失効しない固定コード。
+            // 撮影・共有されたWeb画面の古いQRからの参加登録は制限される。
+            if (!await checkinCodeService.IsValidAsync(ev.DisplayId, request.ReceptionCode))
+            {
+                return StatusCode(403,
+                    new ApiMessage("会場に掲示された参加登録QRコードから開いてください(確認コードが無効か、URLが直接入力されました)"));
             }
 
             var cookieToken = await ParticipantTokenAsync();

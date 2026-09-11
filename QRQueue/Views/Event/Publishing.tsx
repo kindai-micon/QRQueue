@@ -63,6 +63,8 @@ export default function Publishing({ model }: { model: Model }) {
                         <p class="publishing-desc">
                             読み取ると参加登録ページ(<code>/entry/{model.eventId}</code>)へ。
                             すべての参加者はまずここから登録します。
+                            PDFのQRは<strong>固定コード</strong>付き(失効なし)。Web掲示画面のQRは
+                            <strong>30秒で回転</strong>し、撮影・共有された古いQRからは登録できません(チェックインQRと同じ仕様)。
                         </p>
                         <button
                             class="btn-primary"
@@ -70,6 +72,15 @@ export default function Publishing({ model }: { model: Model }) {
                         >
                             A4掲示PDFを発行
                         </button>
+                        <a
+                            class="btn-primary"
+                            style={{ textDecoration: "none", display: "inline-block", padding: "0.6rem 1.2rem", marginTop: "0.5rem" }}
+                            href={`/entry-qr/${model.eventId}`}
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            参加登録QR画面を開く
+                        </a>
                     </section>
 
                     <section class="publishing-card">
@@ -82,14 +93,24 @@ export default function Publishing({ model }: { model: Model }) {
                             チェックインしても次のグループは自動で呼び出されません。次の呼び出しは
                             呼び出しコンソールの「次を呼ぶ」から行ってください(issue #70)。
                         </p>
+                        <button
+                            class="btn-primary"
+                            onClick={() => download(`/api/pdf/checkin/${model.eventId}`, "チェックインQR.pdf")}
+                        >
+                            固定QRのA4掲示PDFを発行
+                        </button>
+                        <p class="publishing-desc" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+                            ⚠ 印刷した固定QRは失効しないため、撮影・共有されたURLからでもチェックインが可能になります。
+                            求められる場合は自動更新画面の運用をご検討ください。
+                        </p>
                         <a
                             class="btn-primary"
-                            style={{ textDecoration: "none", display: "inline-block", padding: "0.6rem 1.2rem" }}
+                            style={{ textDecoration: "none", display: "inline-block", padding: "0.6rem 1.2rem", marginTop: "0.5rem" }}
                             href={`/checkin-qr/${model.eventId}`}
                             target="_blank"
                             rel="noopener"
                         >
-                            受付確認QR画面を開く
+                            受付確認QR画面を開く(自動更新)
                         </a>
                     </section>
                 </div>
