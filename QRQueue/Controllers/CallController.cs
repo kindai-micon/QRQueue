@@ -298,13 +298,32 @@ namespace QRQueue.Controllers
             // 一定時間を超えた未到着グループを優先待機へ退避(issue #69)
             await _queueCallService.EvacuateExpiredSlotGroupsAsync(ev);
 
-            var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).ToListAsync();
+            // ステータス別のグループ取得を1クエリに統合(ポーリング対象のホットパスのため)。
+            // Waiting/CalledAt順はメモリ側で並べ替えて従来と同じ順序を維持する。
+            var activeGroups = await _db.ParticipationGroups
+                .Include(x => x.Tickets)
+                .Where(x => x.Event.DisplayId == eventDisplayId &&
+                    (x.Status == GroupStatus.Waiting ||
+                     x.Status == GroupStatus.Calling ||
+                     x.Status == GroupStatus.Interrupted ||
+                     x.Status == GroupStatus.Matching))
+                .ToListAsync();
 
-            var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).OrderBy(x => x.CalledAt).ToListAsync();
-
-            var interruptedGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Interrupted).OrderBy(x => x.Number).ToListAsync();
-
-            var matchingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Matching).ToListAsync();
+            var waitingGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Waiting)
+                .OrderBy(x => x.Number)
+                .ToList();
+            var callingGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Calling)
+                .OrderBy(x => x.CalledAt)
+                .ToList();
+            var interruptedGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Interrupted)
+                .OrderBy(x => x.Number)
+                .ToList();
+            var matchingGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Matching)
+                .ToList();
 
             view.WaitingGroup = waitingGroups.Select(x => new ParticipationGroupView()
             {

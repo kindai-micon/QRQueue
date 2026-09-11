@@ -35,7 +35,7 @@ namespace QRQueue.Controllers
         ICheckinCodeService checkinCodeService) : ControllerBase
     {
         /// <summary>1グループの最大参加人数(設計§4)</summary>
-        private const int MaxGroupSize = 3;
+        internal const int MaxGroupSize = 3;
 
         public record JoinRequest(Guid EventDisplayId, string Mode, bool Overwrite, string? ReceptionCode);
         public record EventRequest(Guid EventDisplayId);
@@ -863,7 +863,7 @@ namespace QRQueue.Controllers
             return representative != null && representative.Id == ticket.Id;
         }
 
-        private static int ActiveMemberCount(ParticipationGroup group)
+        internal static int ActiveMemberCount(ParticipationGroup group)
         {
             return group.Tickets.Count(t => t.Status != TicketStatus.Cancelled);
         }

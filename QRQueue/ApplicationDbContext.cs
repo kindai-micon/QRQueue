@@ -17,7 +17,8 @@ namespace QRQueue
         {
         }
 
-        public ApplicationDbContext() : base()
+        // プーリング(AddDbContextPool)のため、DIで使う ctor は DbContextOptions 受取の1つに絞る
+        private ApplicationDbContext() : base()
         {
         }
 
