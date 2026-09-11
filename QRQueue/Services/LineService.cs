@@ -154,17 +154,33 @@ namespace QRQueue.Services
                 var token = JsonSerializer.Deserialize<TokenResponse>(body,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 var lineUserId = ExtractSubject(token?.IdToken);
-                if (string.IsNullOrEmpty(lineUserId) && !string.IsNullOrEmpty(token?.AccessToken))
+                // 画面表示用の失敗原因コード(id_token由来か/プロフィールAPI由来か/ステータスコード)を細かく出す。
+                // スマホ等でログを見られない利用者の画面に、原因をそのまま出せるようにするため
+                string? failCode = null;
+                if (lineUserId == null)
+                {
+                    failCode = string.IsNullOrEmpty(token?.IdToken) ? "idtoken_absent" : "idtoken_sub";
+                }
+                if (lineUserId == null && !string.IsNullOrEmpty(token?.AccessToken))
                 {
                     // id_token に sub がない(または id_token 自体が返らない)環境向けフォールバック。
                     // LINE Login ソーシャルAPIのプロフィール取得から userId を取得する
                     // (Messaging API push の to に使えるのはこの userId と同じ値)
-                    lineUserId = await FetchUserIdFromProfileAsync(token.AccessToken);
+                    var (profileUserId, profileStatus) = await FetchUserIdFromProfileAsync(token.AccessToken);
+                    if (profileUserId != null)
+                    {
+                        lineUserId = profileUserId;
+                        failCode = null;
+                    }
+                    else
+                    {
+                        failCode = profileStatus != null ? $"profile{profileStatus}" : "profile_error";
+                    }
                 }
                 if (string.IsNullOrEmpty(lineUserId))
                 {
-                    logger.LogWarning("LINE callback: id_token とプロフィールAPIのどちらからも userId を取得できませんでした");
-                    return (null, "idtoken");
+                    logger.LogWarning("LINE callback: id_token とプロフィールAPIのどちらからも userId を取得できませんでした({Code})", failCode);
+                    return (null, failCode ?? "idtoken");
                 }
 
                 var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
@@ -240,8 +256,8 @@ namespace QRQueue.Services
         }
 
         /// <summary>アクセストークンを使い LINE Login ソーシャルAPI(GET /v2/profile)から userId を取得する。
-        /// id_token に sub がない環境のフォールバック。失敗時は null</summary>
-        private async Task<string?> FetchUserIdFromProfileAsync(string accessToken)
+        /// id_token に sub がない環境のフォールバック。userId と、失敗時は HTTPステータスコードを返す</summary>
+        private async Task<(string? UserId, int? Status)> FetchUserIdFromProfileAsync(string accessToken)
         {
             try
             {
@@ -253,15 +269,17 @@ namespace QRQueue.Services
                 if (!res.IsSuccessStatusCode)
                 {
                     logger.LogWarning("LINE プロフィールAPIが失敗 ({Status}): {Body}", (int)res.StatusCode, body);
-                    return null;
+                    return (null, (int)res.StatusCode);
                 }
                 var profile = JsonSerializer.Deserialize<JsonElement>(body);
-                return profile.TryGetProperty("userId", out var userId) ? userId.GetString() : null;
+                return profile.TryGetProperty("userId", out var userId)
+                    ? (userId.GetString(), null)
+                    : (null, null);
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "LINE プロフィールAPIの呼び出しでエラー");
-                return null;
+                return (null, null);
             }
         }
 
