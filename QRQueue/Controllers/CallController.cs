@@ -18,6 +18,7 @@ namespace QRQueue.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IQueueCallService _queueCallService;
         private readonly IPushSubscriptionService _pushSubscriptionService;  //再呼び出し(Again)用.
+        private readonly ILineService _lineService;  //再呼び出し(Again)のLINE通知用.
         private readonly IHubContext<QueueHub> _hubContext;  // 受付状態の即時配信(issue #65)用.
         private readonly ICheckinCodeService _checkinCodeService;
         private readonly IQrCodeGenerator _qrCodeGenerator;
@@ -27,6 +28,7 @@ namespace QRQueue.Controllers
                  ApplicationDbContext db,
                  IQueueCallService queueCallService,
                  IPushSubscriptionService pushSubscriptionService,
+                 ILineService lineService,
                  IHubContext<QueueHub> hubContext,
                  ICheckinCodeService checkinCodeService,
                  IQrCodeGenerator qrCodeGenerator,
@@ -35,6 +37,7 @@ namespace QRQueue.Controllers
             _db = db;
             _queueCallService = queueCallService;
             _pushSubscriptionService = pushSubscriptionService;
+            _lineService = lineService;
             _hubContext = hubContext;
             _checkinCodeService = checkinCodeService;
             _qrCodeGenerator = qrCodeGenerator;
@@ -147,6 +150,16 @@ namespace QRQueue.Controllers
                     return null;
                 }
                 await _pushSubscriptionService.SendNotifyTicketGroupAsync(group.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
+                // LINE連携済みのチケットにも Messaging API で通知する(初回呼び出しと併用)
+                await _lineService.SendNotifyAsync(
+                    group.Tickets.Select(t => t.DisplayId).ToList(),
+                    $"{ev.Name}でもう一度呼び出しが行われました。ブースまでお越しください");
+                // 電子券画面の即時表示用に SignalR でも配信(初回呼び出しと同様)
+                await _hubContext.Clients.Group(ev.DisplayId.ToString()).SendAsync("Called", new
+                {
+                    groupNumber = group.Number,
+                    groupDisplayId = group.DisplayId.ToString()
+                });
                 group.CallCount++;
                 group.CalledAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync();
