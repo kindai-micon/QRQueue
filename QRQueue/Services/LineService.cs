@@ -154,9 +154,16 @@ namespace QRQueue.Services
                 var token = JsonSerializer.Deserialize<TokenResponse>(body,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 var lineUserId = ExtractSubject(token?.IdToken);
+                if (string.IsNullOrEmpty(lineUserId) && !string.IsNullOrEmpty(token?.AccessToken))
+                {
+                    // id_token に sub がない(または id_token 自体が返らない)環境向けフォールバック。
+                    // LINE Login ソーシャルAPIのプロフィール取得から userId を取得する
+                    // (Messaging API push の to に使えるのはこの userId と同じ値)
+                    lineUserId = await FetchUserIdFromProfileAsync(token.AccessToken);
+                }
                 if (string.IsNullOrEmpty(lineUserId))
                 {
-                    logger.LogWarning("LINE id_token から sub を取得できませんでした");
+                    logger.LogWarning("LINE callback: id_token とプロフィールAPIのどちらからも userId を取得できませんでした");
                     return (null, "idtoken");
                 }
 
@@ -180,20 +187,82 @@ namespace QRQueue.Services
             }
         }
 
-        /// <summary>id_token(JWT)のペイロードから sub(LINE userId)を取り出す</summary>
-        private static string? ExtractSubject(string? idToken)
+        /// <summary>id_token(JWT)のペイロードから sub(LINE userId)を取り出す。
+        /// 取得できない場合は、原因をログに残す(値そのものはログに出さない)</summary>
+        private string? ExtractSubject(string? idToken)
         {
-            if (string.IsNullOrEmpty(idToken)) return null;
-            var parts = idToken.Split('.');
-            if (parts.Length < 2) return null;
-            var payload = parts[1].Replace('-', '+').Replace('_', '/');
-            switch (payload.Length % 4)
+            if (string.IsNullOrEmpty(idToken))
             {
-                case 2: payload += "=="; break;
-                case 3: payload += "="; break;
+                // LINE はスコープやチャネル設定によって id_token を返さないことがある
+                logger.LogWarning("LINE id_token がレスポンスに含まれていません(プロフィールAPIへフォールバックします)");
+                return null;
             }
-            var json = JsonSerializer.Deserialize<JsonElement>(Convert.FromBase64String(payload));
-            return json.TryGetProperty("sub", out var sub) ? sub.GetString() : null;
+            var parts = idToken.Split('.');
+            if (parts.Length < 2)
+            {
+                logger.LogWarning("LINE id_token の形式が不正です(セグメント数={Count})", parts.Length);
+                return null;
+            }
+            string json;
+            try
+            {
+                var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                switch (payload.Length % 4)
+                {
+                    case 2: payload += "=="; break;
+                    case 3: payload += "="; break;
+                }
+                json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            }
+            catch (FormatException ex)
+            {
+                logger.LogWarning(ex, "LINE id_token のペイロードをデコードできませんでした");
+                return null;
+            }
+            JsonElement jsonElement;
+            try
+            {
+                jsonElement = JsonSerializer.Deserialize<JsonElement>(json);
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "LINE id_token のペイロードがJSONとして解釈できませんでした");
+                return null;
+            }
+            if (jsonElement.TryGetProperty("sub", out var sub) && !string.IsNullOrEmpty(sub.GetString()))
+            {
+                return sub.GetString();
+            }
+            // 原因特定用にクレーム名だけをログへ出す(値は出さない)
+            var keys = string.Join(",", jsonElement.EnumerateObject().Select(p => p.Name));
+            logger.LogWarning("LINE id_token に sub が含まれませんでした。含まれるクレーム: [{Keys}]", keys);
+            return null;
+        }
+
+        /// <summary>アクセストークンを使い LINE Login ソーシャルAPI(GET /v2/profile)から userId を取得する。
+        /// id_token に sub がない環境のフォールバック。失敗時は null</summary>
+        private async Task<string?> FetchUserIdFromProfileAsync(string accessToken)
+        {
+            try
+            {
+                var client = httpClientFactory.CreateClient();
+                using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.line.me/v2/profile");
+                request.Headers.Authorization = new("Bearer", accessToken);
+                var res = await client.SendAsync(request);
+                var body = await res.Content.ReadAsStringAsync();
+                if (!res.IsSuccessStatusCode)
+                {
+                    logger.LogWarning("LINE プロフィールAPIが失敗 ({Status}): {Body}", (int)res.StatusCode, body);
+                    return null;
+                }
+                var profile = JsonSerializer.Deserialize<JsonElement>(body);
+                return profile.TryGetProperty("userId", out var userId) ? userId.GetString() : null;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "LINE プロフィールAPIの呼び出しでエラー");
+                return null;
+            }
         }
 
         // ===== 送信 =====
