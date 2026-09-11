@@ -12,8 +12,13 @@ namespace QRQueue.Controllers
     [Controller]
     public class PageController(ITicketRepository tickets) : ControllerBase
     {
-        private static JsxViewResult Page(string view, object model) =>
-            new(view, model, RenderMode.ServerAndClient);
+        // レンダリング高速化: 全ビューとも初期データをクライアント側 fetch で取得するため、
+        // SSR(ServerAndClient)が描くのはローディングスケルトンのみ。
+        // 毎リクエストのサーバー側 JS レンダリング(Jint)と hydration の二重コストを避けるため
+        // 既定は Client(SPA モード)とし、SEO/ファーストペイントが必要なページだけ上書きする。
+        private static JsxViewResult Page(string view, object model,
+            RenderMode mode = RenderMode.Client) =>
+            new(view, model, mode);
 
         [HttpGet("/")]
         public IActionResult Index() => Page("Home/Index", new { });
