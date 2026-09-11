@@ -55,6 +55,7 @@ namespace QRQueue
                     new Models.API.ApiMessage(string.Join(" ", ctx.ModelState.Values
                         .SelectMany(v => v.Errors).Select(e => e.ErrorMessage).Where(m => !string.IsNullOrEmpty(m))))));
             builder.Services.AddScoped<IPasscodeService, PasscodeService>();
+            builder.Services.AddScoped<ITicketStatusService, TicketStatusService>();
             builder.Services.AddSingleton<ICheckinCodeService, CheckinCodeService>();
             builder.Services.AddScoped<ITicketPdfGenerator, TicketPdfGenerator>();
             builder.Services.AddSingleton<IQrCodeGenerator, QrCodeGenerator>();

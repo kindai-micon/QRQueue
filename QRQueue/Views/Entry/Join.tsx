@@ -4,17 +4,20 @@ import { readErrorMessage, type GroupInfoView, type JoinResult } from "@/Shared/
 
 type Model = {
     joinToken: string;
+    // SSR初期データ: コントローラが埋め込んだグループ情報。あれば初回fetchをスキップする。
+    initial?: GroupInfoView | null;
 };
 
 // グループ参加確認画面(設計書 /join/[token])。方式③の招待QRの飛び先。
 export default function Join({ model }: { model: Model }) {
-    const [info, setInfo] = useState<GroupInfoView | null>(null);
+    const [info, setInfo] = useState<GroupInfoView | null>(model.initial ?? null);
     const [notFound, setNotFound] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [loaded, setLoaded] = useState(false);
+    const [loaded, setLoaded] = useState<boolean>(model.initial != null);
 
     useEffect(() => {
+        if (model.initial) return; // SSR初期データで表示済み
         (async () => {
             try {
                 const res = await fetch(`/api/entry/group/${encodeURIComponent(model.joinToken)}`);
