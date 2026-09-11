@@ -12,6 +12,8 @@ namespace QRQueue.Models
         public EventStatus Status { get; set; } = EventStatus.Preparing;
         // 方式②のマッチング人数(上限3)
         public int AutoGroupSize { get; set; } = 3;
+        // チェックイン完了後や待機列が空いたときに次のグループを自動で呼び出すか(呼び出しコンソールで切替可)
+        public bool AutoNextEnabled { get; set; } = true;
         [ForeignKey(nameof(TicketInfo))]
         public Guid TicketInfoId { get; set; }
         public TicketInfo TicketInfo { get; set; }

@@ -122,6 +122,26 @@ namespace QRQueue.Controllers
             return _hubContext.Clients.Group(eventDisplayId.ToString()).SendAsync("UpdateStatus");
         }
 
+        /// <summary>自動呼出し(AutoNext)のオン/オフ切替。オフにすると次の呼び出しはスタッフの「次を呼ぶ」のみで行う</summary>
+        public record AutoNextRequest(bool Enabled);
+
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("autonext/{eventDisplayId}")]
+        public async Task<IActionResult> SetAutoNext(Guid eventDisplayId, [FromBody] AutoNextRequest request)
+        {
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+
+            ev.AutoNextEnabled = request.Enabled;
+            await _db.SaveChangesAsync();
+            // 呼び出しコンソールへ即時反映
+            await NotifyStatusChangedAsync(eventDisplayId);
+            return Ok(new { autoNextEnabled = ev.AutoNextEnabled });
+        }
+
         [Authorize(Policy = "CallExecute")]
         [HttpPut("next/{eventDisplayId}")]
         public async Task<IActionResult> Next(Guid eventDisplayId)
