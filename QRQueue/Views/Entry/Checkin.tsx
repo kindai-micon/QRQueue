@@ -1,6 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
-import { readErrorMessage, type CheckinResult, type EventInfoView, type RestoreResult } from "@/Shared/api";
+import { readErrorMessage, type CheckinResult, type EventInfoView } from "@/Shared/api";
 
 type Model = {
     eventDisplayId: string;
@@ -16,7 +16,6 @@ export default function Checkin({ model }: { model: Model }) {
     const [result, setResult] = useState<CheckinResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [ticketUrl, setTicketUrl] = useState<string | null>(null);
     // 受付掲示QRに埋め込まれた到着確認コード(issue #68)。
     // window はサーバーレンダリング(SSR)時に存在しないため、クライアント側でのみ読む。
     const [receptionCode, setReceptionCode] = useState<string | null>(null);
@@ -57,23 +56,6 @@ export default function Checkin({ model }: { model: Model }) {
             if (res.ok) {
                 const data: CheckinResult = await res.json();
                 setResult(data);
-                // 成功時は restore で自分の電子券へ戻る導線を付ける
-                try {
-                    const restore = await fetch("/api/entry/restore", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ eventDisplayId: model.eventDisplayId }),
-                    });
-                    if (restore.ok) {
-                        const r: RestoreResult = await restore.json();
-                        setTicketUrl(`/ticket/${r.ticketDisplayId}`);
-                        setTimeout(() => {
-                            window.location.href = `/ticket/${r.ticketDisplayId}`;
-                        }, 5000);
-                    }
-                } catch {
-                    // 復元失敗は導線なしのまま(完了表示は維持)
-                }
                 return;
             }
             setError(await readErrorMessage(res));
@@ -139,11 +121,7 @@ export default function Checkin({ model }: { model: Model }) {
                         <div class="checkin-done-label">グループ番号</div>
                         <div class="checkin-done-number">{result.groupNumber}</div>
                         <p>受け渡し場所までお越しください。</p>
-                        {ticketUrl && (
-                            <a class="checkin-ticket-link" href={ticketUrl}>
-                                電子券を見る(5秒後に自動で移動します)
-                            </a>
-                        )}
+                        <p>このチケットは使用済みになりました。端末の参加情報は削除されています。</p>
                     </div>
                 )}
             </div>

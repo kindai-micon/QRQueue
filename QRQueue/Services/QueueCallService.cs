@@ -290,12 +290,19 @@ public class QueueCallService(
             }
             if (group.Status == GroupStatus.Completed)
             {
-                // 冪等: 多重チェックインでも状態は変化しない
+                // 冪等: 多重チェックインでも状態は変化しない。
+                // チェックイン=使用済み確定のため、未使用チケットが残っていれば使用済みにする
+                UseGroupTickets(group);
+                await groupRepository.SaveChangesAsync();
                 return group;
             }
 
             var wasInterrupted = group.Status == GroupStatus.Interrupted;
             group.Status = GroupStatus.Completed;
+            // チェックインと同時にチケットを使用済みにする
+            // (スタッフの「ゲーム終了」操作は廃止。使用済みチケットは再チェックイン・
+            //  再呼び出しの対象にならず、同じ参加者は新しいチケットで再度受付できる)
+            UseGroupTickets(group);
             await groupRepository.SaveChangesAsync();
 
             if (wasInterrupted)
@@ -311,6 +318,15 @@ public class QueueCallService(
             await CallNextCoreAsync(ev);
             return group;
         });
+    }
+
+    /// <summary>グループの有効チケット(Registered)をすべて使用済み(Used)にする(issue #71)。保存は呼び出し側で行う</summary>
+    private static void UseGroupTickets(ParticipationGroup group)
+    {
+        foreach (var ticket in group.Tickets.Where(t => t.Status == TicketStatus.Registered))
+        {
+            ticket.Status = TicketStatus.Used;
+        }
     }
 
     public async Task<ParticipationGroup?> FormGroupFromMatchingPoolAsync(Event ev, int memberCount)
