@@ -49,6 +49,7 @@ namespace QRQueue.Controllers
         /// 30秒で回転する到着確認コードを含むURLのQRを返す。
         /// 受付画面(/checkin-qr/{eventDisplayId})がこの間隔で再読み込みして表示する。
         /// 撮影・共有されたQRはコード失効後に使用できない。
+        /// 固定版は別途 掲示PDF(GET /api/pdf/checkin/{eventDisplayId})で発行する。
         /// </summary>
         [Authorize(Policy = "CallView")]
         [HttpGet("checkin-qrcode/{eventDisplayId}")]
@@ -61,6 +62,25 @@ namespace QRQueue.Controllers
             }
             var code = await _checkinCodeService.GetCurrentCheckinCodeAsync(eventDisplayId);
             var url = $"{_baseUrlResolver.Resolve(Request)}/checkin/{eventDisplayId}?rc={code}";
+            return File(_qrCodeGenerator.GeneratePng(url, 400, 400), "image/png");
+        }
+
+        /// <summary>
+        /// 参加登録QRのPNG。Web掲示画面(/entry-qr/{eventDisplayId})用。
+        /// チェックインQRと同じ仕様: 画面表示は30秒で回転する到着確認コードを含むURLのQRを返す。
+        /// 掲示画面がこの間隔で再読み込みして表示する。固定版は別途 掲示PDF(GET /api/pdf/entry/{eventDisplayId})で発行する。
+        /// </summary>
+        [Authorize(Policy = "CallView")]
+        [HttpGet("entry-qrcode/{eventDisplayId}")]
+        public async Task<IActionResult> EntryQrCode(Guid eventDisplayId)
+        {
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+            var code = await _checkinCodeService.GetCurrentCheckinCodeAsync(eventDisplayId);
+            var url = $"{_baseUrlResolver.Resolve(Request)}/entry/{eventDisplayId}?rc={code}";
             return File(_qrCodeGenerator.GeneratePng(url, 400, 400), "image/png");
         }
 

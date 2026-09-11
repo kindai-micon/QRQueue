@@ -25,6 +25,13 @@ export default function Index({ model }: { model: Model }) {
     const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    //作成された自分のチケット番号.
     const [error, setError] = useState<string | null>(null);                        //画面内に表示するエラー文言.
     const [busyMode, setBusyMode] = useState<string | null>(null);                  //処理中の参加方法（ボタンの二重押下防止）.
+    // 会場掲示QRに埋め込まれた到着確認コード(チェックインQRと同じ仕様)。
+    // window はサーバーレンダリング(SSR)時に存在しないため、クライアント側でのみ読む。
+    const [receptionCode, setReceptionCode] = useState<string | null>(null);
+
+    useEffect(() => {
+        setReceptionCode(new URLSearchParams(window.location.search).get("rc"));
+    }, []);
 
     useEffect(() => {
         let disposed = false;
@@ -99,6 +106,7 @@ export default function Index({ model }: { model: Model }) {
                     eventDisplayId: model.eventId,
                     mode: mode,
                     overwrite: false,
+                    receptionCode: receptionCode,
                 }),
             });
 
@@ -152,6 +160,7 @@ export default function Index({ model }: { model: Model }) {
                     eventDisplayId: model.eventId,
                     mode: mode,
                     overwrite: true,
+                    receptionCode: receptionCode,
                 }),
             });
 
