@@ -1,7 +1,8 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import { groupStatusLabel, readErrorMessage, type EventInfoView, type GroupView, type QueueView } from "@/Shared/api";
+import { isSpeechSupported, speakCallAnnouncement } from "@/Shared/speech";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -17,6 +18,12 @@ export default function Call({ model }: { model: Model }) {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [denied, setDenied] = useState(false);
+
+    // 呼び出し読み上げ(音声合成)。ブラウザのユーザー操作制約のため、
+    // トグルをクリックした時点で有効化する。
+    const speechSupported = isSpeechSupported();
+    const [ttsOn, setTtsOn] = useState(false);
+    const lastCalledKey = useRef<string | null>(null);
 
     async function loadEvent() {
         try {
@@ -88,6 +95,38 @@ export default function Call({ model }: { model: Model }) {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [model.eventId]);
+
+    // 呼び出し中グループの変化を検出して新規呼び出しを読み上げる。
+    // SignalR の Called と 5 秒ポーリングのどちらで検知しても、
+    // 「呼び出し中に新しく加わった番号」だけを読み上げ対象にする。
+    useEffect(() => {
+        if (!ttsOn || !queue) return;
+        const calling = [...(queue.callingGroup ?? [])].sort((a, b) => a.number - b.number);
+        const key = calling.map((g) => g.number).join(",");
+        const prev = lastCalledKey.current;
+        lastCalledKey.current = key;
+        if (prev === null) return; // 初回ロード時は読み上げない(ページ開いた時点の状態)
+        const prevNumbers = new Set(prev ? prev.split(",").map(Number) : []);
+        const newlyCalled = calling.filter((g) => !prevNumbers.has(g.number));
+        // 同時に複数呼び出しされた場合は最初の1つだけを読み上げる
+        // (speechSynthesis は逐次再生のため、同時発話は打ち切られてしまう)
+        if (newlyCalled.length > 0) {
+            speakCallAnnouncement(newlyCalled[0].number, newlyCalled[0].people);
+        }
+    }, [queue, ttsOn]);
+
+    // トグル切り替え時の初期化。有効化した瞬間の状態は読み上げない。
+    function toggleTts() {
+        setTtsOn((on) => {
+            if (!on) {
+                lastCalledKey.current = queue
+                    ? [...(queue.callingGroup ?? [])].sort((a, b) => a.number - b.number).map((g) => g.number).join(",")
+                    : null;
+                window.speechSynthesis?.cancel();
+            }
+            return !on;
+        });
+    }
 
     async function action(name: string, fn: () => Promise<Response>, okMessage?: string) {
         setBusy(true);
@@ -211,6 +250,26 @@ export default function Call({ model }: { model: Model }) {
                     >
                         🔁 再呼び出し
                     </button>
+                    {speechSupported && (
+                        <>
+                            <button
+                                class={ttsOn ? "btn-danger btn-sm" : "btn-primary btn-sm"}
+                                onClick={toggleTts}
+                                title="呼び出し時に番号を音声で読み上げます"
+                            >
+                                {ttsOn ? "🔇 読み上げを止める" : "🔊 読み上げを開始"}
+                            </button>
+                            {ttsOn && (
+                                <button
+                                    class="btn-secondary btn-sm"
+                                    onClick={() => speakCallAnnouncement(queue?.callingGroup?.[0]?.number ?? 1001, queue?.callingGroup?.[0]?.people ?? 1)}
+                                    title="読み上げの音量・速度を確認できます"
+                                >
+                                    🔈 テスト
+                                </button>
+                            )}
+                        </>
+                    )}
                 </div>
                 <p class="call-hint">
                     「次を呼ぶ」を押すと、呼び出し中で未チェックインのグループは割り込みプールへ退避します。
