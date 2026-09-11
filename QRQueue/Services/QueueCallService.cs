@@ -27,9 +27,10 @@ public interface IQueueCallService
     Task<ParticipationGroup?> CallNextAsync(Event ev);
 
     /// <summary>
-    /// 優先待機(Interrupted/割り込みプール)のグループをスタッフが直接呼び出す。
-    /// 状態を Calling へ移し(新しいゲーム参加枠を付与)、SignalR/Web Push/LINE の告知を行う。
-    /// 対象が優先待機でない場合は null を返す。
+    /// 優先待機(Interrupted/割り込みプール)のグループへ通知を(再)送信する。
+    /// 状態は Interrupted のまま変えない(グループは割り込みプールに残留し、
+    /// 代表者のチェックインで Interrupted → Completed となる)。
+    /// SignalR/Web Push/LINE の告知のみ行う。対象が優先待機でない場合は null を返す。
     /// </summary>
     Task<ParticipationGroup?> CallInterruptedGroupAsync(Event ev, Guid groupDisplayId);
 
@@ -118,9 +119,9 @@ public class QueueCallService(
     }
 
     /// <summary>
-    /// 優先待機(Interrupted/割り込みプール)のグループをスタッフが直接呼び出す。
-    /// 新しいゲーム参加枠(GameSlotId)を付与して Calling へ移し、CallNext と同様の告知を行う。
-    /// これにより「代表者のチェックインを待たずに」優先プールのグループを任意のタイミングで呼び出せる。
+    /// 優先待機(Interrupted/割り込みプール)のグループへ通知を(再)送信する。
+    /// 代表者のチェックインを促すためのもので、状態は Interrupted のまま変更しない
+    /// (グループは割り込みプールに残留する)。SignalR/Web Push/LINE の告知のみ行う。
     /// </summary>
     public Task<ParticipationGroup?> CallInterruptedGroupAsync(Event ev, Guid groupDisplayId)
     {
@@ -139,11 +140,7 @@ public class QueueCallService(
                 return null;
             }
 
-            group.Status = GroupStatus.Calling;
-            group.CalledAt = DateTimeOffset.UtcNow;
-            group.GameSlotId = Guid.CreateVersion7();
-            await groupRepository.SaveChangesAsync();
-
+            // 状態は変更せず、代表者への通知(SignalR/Web Push/LINE)のみ送る
             await AnnounceAsync(ev, group);
             return group;
         });

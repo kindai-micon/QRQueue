@@ -123,14 +123,14 @@ export default function Call({ model }: { model: Model }) {
         const confirmText = op === "interrupt"
             ? `${label} を優先待機へ移動しますか?`
             : op === "call"
-                ? `${label} を今すぐ呼び出しますか?\n優先待機のグループを直接呼び出します(通知も送られます)。`
+                ? `${label} に通知を送りますか?\nグループは割り込みプールに残ったままです(Web Push・LINE・電子券画面に通知が届きます)。`
                 : `${label} を棄権扱いにして、チケットを無効化しますか?\nこの操作は取り消せません。`;
         if (!confirm(confirmText)) return;
 
         const okMessage = op === "interrupt"
             ? "優先待機へ移動しました"
             : op === "call"
-                ? `${g.number}番を呼び出しました(通知を送りました)`
+                ? `${g.number}番に通知を送りました`
                 : "棄権処理を行いました(チケットを無効化しました)";
         action(op, () => fetch(`/api/call/group/${g.displayId}/${op}`, { method: "PUT" }), okMessage);
     }
@@ -153,7 +153,7 @@ export default function Call({ model }: { model: Model }) {
                                     disabled={busy}
                                     onClick={() => callButton(g)}
                                 >
-                                    📣 呼び出す
+                                    📣 通知
                                 </button>
                             </td>
                         )}
@@ -283,10 +283,11 @@ export default function Call({ model }: { model: Model }) {
                     </section>
                     <section class="call-panel">
                         <h2>割り込みプール(代表者チェックインで優先)</h2>
-                        {/* 優先プールのグループはスタッフが任意のタイミングで直接呼び出せる */}
+                        {/* 優先プールのグループへはスタッフが任意のタイミングで通知を(再)送信できる。状態は変わらずプールに残留する */}
                         {groupTable(queue?.interruptedGroup ?? [], (g) => staffGroupAction(g, "call"))}
                         <p class="call-hint">
-                            「📣 呼び出す」で代表者のチェックインを待たずに直接呼び出せます(Web Push・LINE・電子券画面に通知が届きます)。
+                            「📣 通知」で代表者に再通知を送れます(Web Push・LINE・電子券画面に通知が届きます)。
+                            グループは割り込みプールに残ったままです。代表者がチェックインQRを読み取ると受付完了になります。
                         </p>
                     </section>
                     <section class="call-panel">
