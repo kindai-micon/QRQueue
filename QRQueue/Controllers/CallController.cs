@@ -18,6 +18,7 @@ namespace QRQueue.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IQueueCallService _queueCallService;
         private readonly IPushSubscriptionService _pushSubscriptionService;  //再呼び出し(Again)用.
+        private readonly ILineService _lineService;  //再呼び出し(Again)・優先プール直接呼び出しのLINE通知用.
         private readonly IHubContext<QueueHub> _hubContext;  // 受付状態の即時配信(issue #65)用.
         private readonly ICheckinCodeService _checkinCodeService;
         private readonly IQrCodeGenerator _qrCodeGenerator;
@@ -27,6 +28,7 @@ namespace QRQueue.Controllers
                  ApplicationDbContext db,
                  IQueueCallService queueCallService,
                  IPushSubscriptionService pushSubscriptionService,
+                 ILineService lineService,
                  IHubContext<QueueHub> hubContext,
                  ICheckinCodeService checkinCodeService,
                  IQrCodeGenerator qrCodeGenerator,
@@ -35,6 +37,7 @@ namespace QRQueue.Controllers
             _db = db;
             _queueCallService = queueCallService;
             _pushSubscriptionService = pushSubscriptionService;
+            _lineService = lineService;
             _hubContext = hubContext;
             _checkinCodeService = checkinCodeService;
             _qrCodeGenerator = qrCodeGenerator;
@@ -147,6 +150,16 @@ namespace QRQueue.Controllers
                     return null;
                 }
                 await _pushSubscriptionService.SendNotifyTicketGroupAsync(group.Tickets.ToList(), "再度呼び出し", "再度呼び出しが行われました。");
+                // LINE連携済みのチケットにも Messaging API で通知する(初回呼び出しと併用)
+                await _lineService.SendNotifyAsync(
+                    group.Tickets.Select(t => t.DisplayId).ToList(),
+                    $"{ev.Name}でもう一度呼び出しが行われました。ブースまでお越しください");
+                // 電子券画面の即時表示用に SignalR でも配信(初回呼び出しと同様)
+                await _hubContext.Clients.Group(ev.DisplayId.ToString()).SendAsync("Called", new
+                {
+                    groupNumber = group.Number,
+                    groupDisplayId = group.DisplayId.ToString()
+                });
                 group.CallCount++;
                 group.CalledAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync();
@@ -223,6 +236,31 @@ namespace QRQueue.Controllers
 
             await _hubContext.Clients.Group(group.Event.DisplayId.ToString()).SendAsync("QueueChanged");
             return Ok(new { groupNumber = group.Number, cancelledTickets = cancelled });
+        }
+
+        /// <summary>
+        /// 優先待機(Interrupted/割り込みプール)のグループを直接呼び出す。
+        /// 代表者のチェックインを待たずに、スタッフの判断で優先プールのグループを呼び出したい場合に使用する。
+        /// 状態を Calling へ移し、SignalR/Web Push/LINE の告知も行う(QueueCallService.CallInterruptedGroupAsync)。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("group/{groupDisplayId}/call")]
+        public async Task<IActionResult> CallInterruptedGroup(Guid groupDisplayId)
+        {
+            var group = await _db.ParticipationGroups
+                .Include(x => x.Event)
+                .FirstOrDefaultAsync(x => x.DisplayId == groupDisplayId);
+            if (group == null)
+            {
+                return NotFound();
+            }
+
+            var called = await _queueCallService.CallInterruptedGroupAsync(group.Event, groupDisplayId);
+            if (called == null)
+            {
+                return Conflict("優先待機(割り込みプール)のグループのみ直接呼び出せます");
+            }
+            return Ok(new { groupNumber = group.Number, status = GroupStatus.Calling.ToString() });
         }
 
         /// <summary>
