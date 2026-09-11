@@ -226,6 +226,31 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
+        /// 優先待機(Interrupted/割り込みプール)のグループを直接呼び出す。
+        /// 代表者のチェックインを待たずに、スタッフの判断で優先プールのグループを呼び出したい場合に使用する。
+        /// 状態を Calling へ移し、SignalR/Web Push/LINE の告知も行う(QueueCallService.CallInterruptedGroupAsync)。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("group/{groupDisplayId}/call")]
+        public async Task<IActionResult> CallInterruptedGroup(Guid groupDisplayId)
+        {
+            var group = await _db.ParticipationGroups
+                .Include(x => x.Event)
+                .FirstOrDefaultAsync(x => x.DisplayId == groupDisplayId);
+            if (group == null)
+            {
+                return NotFound();
+            }
+
+            var called = await _queueCallService.CallInterruptedGroupAsync(group.Event, groupDisplayId);
+            if (called == null)
+            {
+                return Conflict("優先待機(割り込みプール)のグループのみ直接呼び出せます");
+            }
+            return Ok(new { groupNumber = group.Number, status = GroupStatus.Calling.ToString() });
+        }
+
+        /// <summary>
         /// ゲーム終了の確定(issue #71)。
         /// チェックイン済み(Completed)グループの有効チケットを「使用済み(Used)」にする。
         /// groupNumber 未指定の場合は、直近に呼び出された枠(CalledAt が最大の Completed
