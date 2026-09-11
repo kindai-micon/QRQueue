@@ -13,6 +13,7 @@ using System.Text.Json.Serialization;
 using System.Security.Claims;
 using QRQueue.Hubs;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Caching.Memory;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
 using JsxCore;
@@ -70,8 +71,11 @@ namespace QRQueue
             builder.Services.AddSingleton<IAuthorityScanService, AuthorityScanService>();
             builder.Services.AddSwaggerGen();
             builder.Services.AddScoped<IAuthorizationHandler, DynamicRoleHandler>();
+            builder.Services.AddMemoryCache();
             builder.Services.AddSignalR();
-            builder.Services.AddDbContext<ApplicationDbContext>(options =>
+            // DbContext プーリング: リクエスト毎のコンテキスト生成コストを削減
+            // (ApplicationDbContext にメンバ状態を持たせないよう注意)
+            builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
             {
                 options.UseNpgsql(builder.Configuration.GetConnectionString("lottery-db"));
             });
@@ -155,10 +159,22 @@ namespace QRQueue
                         context.RejectPrincipal();
                         return;
                     }
-                    var tickets = context.HttpContext.RequestServices
-                        .GetRequiredService<ITicketRepository>();
-                    if (!await tickets.HasActiveTicketAsync(token))
+                    // 短時間キャッシュ: 参加者からの全リクエスト(cookie認証)でDB照会が走るため、
+                    // 有効判定を30秒だけIMemoryCacheに保持する。受付取消などの反映は最大30秒遅延する。
+                    var cache = context.HttpContext.RequestServices
+                        .GetRequiredService<IMemoryCache>();
+                    var cacheKey = $"participant-token-active:{token}";
+                    var isActive = await cache.GetOrCreateAsync(cacheKey, entry =>
                     {
+                        entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+                        var tickets = context.HttpContext.RequestServices
+                            .GetRequiredService<ITicketRepository>();
+                        return tickets.HasActiveTicketAsync(token);
+                    });
+                    if (!isActive)
+                    {
+                        // 無効判定はキャッシュせず即時破棄(再ログイン・取消を即座に反映させる)
+                        cache.Remove(cacheKey);
                         context.RejectPrincipal();
                     }
                 };
