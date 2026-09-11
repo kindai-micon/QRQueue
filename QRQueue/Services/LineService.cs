@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using QRQueue.Models;
 
@@ -107,7 +108,12 @@ namespace QRQueue.Services
 
         // ===== コールバック(紐付け) =====
 
-        private sealed record TokenResponse(string? AccessToken, string? IdToken);
+        // LINEのトークンレスポンスはスネークケース(access_token / id_token)。
+        // PropertyNameCaseInsensitive ではアンダースコアを吸収できないため、
+        // JsonPropertyName で明示的にマッピングする(無いと常に null になり連携が必ず失敗する)
+        private sealed record TokenResponse(
+            [property: JsonPropertyName("access_token")] string? AccessToken,
+            [property: JsonPropertyName("id_token")] string? IdToken);
 
         public async Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state)
         {

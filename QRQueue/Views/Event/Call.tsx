@@ -115,24 +115,30 @@ export default function Call({ model }: { model: Model }) {
         }
     }
 
-    // スタッフによるグループ単位の操作(優先待機移動・棄権)(issue #73)。
+    // スタッフによるグループ単位の操作(優先待機移動・棄権・直接呼び出し)(issue #73)。
     // 誤操作防止のため、実行前に確認ダイアログを表示する。
-    async function staffGroupAction(g: GroupView, op: "interrupt" | "forfeit") {
+    async function staffGroupAction(g: GroupView, op: "interrupt" | "forfeit" | "call") {
         if (!g.displayId) return;
         const label = `${g.number}番(メンバー ${g.people} 人)`;
         const confirmText = op === "interrupt"
             ? `${label} を優先待機へ移動しますか?`
-            : `${label} を棄権扱いにして、チケットを無効化しますか?\nこの操作は取り消せません。`;
+            : op === "call"
+                ? `${label} を今すぐ呼び出しますか?\n優先待機のグループを直接呼び出します(通知も送られます)。`
+                : `${label} を棄権扱いにして、チケットを無効化しますか?\nこの操作は取り消せません。`;
         if (!confirm(confirmText)) return;
 
-        action(op, () => fetch(`/api/call/group/${g.displayId}/${op}`, { method: "PUT" }),
-            op === "interrupt" ? "優先待機へ移動しました" : "棄権処理を行いました(チケットを無効化しました)");
+        const okMessage = op === "interrupt"
+            ? "優先待機へ移動しました"
+            : op === "call"
+                ? `${g.number}番を呼び出しました(通知を送りました)`
+                : "棄権処理を行いました(チケットを無効化しました)";
+        action(op, () => fetch(`/api/call/group/${g.displayId}/${op}`, { method: "PUT" }), okMessage);
     }
 
-    const groupTable = (groups: GroupView[]) => (
+    const groupTable = (groups: GroupView[], callButton?: (g: GroupView) => void) => (
         <table class="data-table">
             <thead>
-                <tr><th>番号</th><th>人数</th><th>状態</th></tr>
+                <tr><th>番号</th><th>人数</th><th>状態</th>{callButton && <th>操作</th>}</tr>
             </thead>
             <tbody>
                 {groups.map((g, i) => (
@@ -140,9 +146,20 @@ export default function Call({ model }: { model: Model }) {
                         <td>{g.number}</td>
                         <td>{g.people}</td>
                         <td>{groupStatusLabel(g.status)}</td>
+                        {callButton && (
+                            <td>
+                                <button
+                                    class="btn-secondary btn-sm"
+                                    disabled={busy}
+                                    onClick={() => callButton(g)}
+                                >
+                                    📣 呼び出す
+                                </button>
+                            </td>
+                        )}
                     </tr>
                 ))}
-                {groups.length === 0 && <tr><td colSpan={3}>—</td></tr>}
+                {groups.length === 0 && <tr><td colSpan={callButton ? 4 : 3}>—</td></tr>}
             </tbody>
         </table>
     );
@@ -266,7 +283,11 @@ export default function Call({ model }: { model: Model }) {
                     </section>
                     <section class="call-panel">
                         <h2>割り込みプール(代表者チェックインで優先)</h2>
-                        {groupTable(queue?.interruptedGroup ?? [])}
+                        {/* 優先プールのグループはスタッフが任意のタイミングで直接呼び出せる */}
+                        {groupTable(queue?.interruptedGroup ?? [], (g) => staffGroupAction(g, "call"))}
+                        <p class="call-hint">
+                            「📣 呼び出す」で代表者のチェックインを待たずに直接呼び出せます(Web Push・LINE・電子券画面に通知が届きます)。
+                        </p>
                     </section>
                     <section class="call-panel">
                         <h2>呼び出し待ち(正常キュー)</h2>
