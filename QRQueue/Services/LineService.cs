@@ -189,7 +189,10 @@ namespace QRQueue.Services
                     return (null, failCode ?? "idtoken");
                 }
 
-                var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
+                var ticket = await db.Tickets
+                    .Include(t => t.ParticipationGroup)
+                        .ThenInclude(g => g.Event)
+                    .FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
                 if (ticket == null)
                 {
                     logger.LogWarning("LINE callback: チケットが見つからない ({TicketId})", ticketDisplayId);
@@ -198,8 +201,22 @@ namespace QRQueue.Services
                 ticket.LineUserId = lineUserId;
                 await db.SaveChangesAsync();
 
-                await SendNotifyAsync([ticketDisplayId],
-                    "QRQueueの呼び出し通知を設定しました。\n順番が来るとこのトークに通知が届きます。");
+                // 連携したチケットが分かるよう、イベント名と番号を確認メッセージに載せる。
+                // 複数のチケットで連携したときに「どのチケットの通知だったか」を区別できるようにするため
+                var group = ticket.ParticipationGroup;
+                var message = "QRQueueの呼び出し通知を設定しました。\n";
+                if (group?.Event != null)
+                {
+                    message += $"イベント: {group.Event.Name}\n";
+                }
+                message += $"チケット番号: {ticket.Number}";
+                if (group != null && group.Number > 0)
+                {
+                    message += $"\n呼び出し番号: {group.Number}番";
+                }
+                message += "\n順番が来るとこのトークに通知が届きます。";
+
+                await SendNotifyAsync([ticketDisplayId], message);
                 return (ticketDisplayId, null);
             }
             catch (Exception ex)
