@@ -26,6 +26,13 @@ public interface IQueueCallService
     /// </summary>
     Task<ParticipationGroup?> CallNextAsync(Event ev);
 
+    /// <summary>
+    /// 優先待機(Interrupted/割り込みプール)のグループをスタッフが直接呼び出す。
+    /// 状態を Calling へ移し(新しいゲーム参加枠を付与)、SignalR/Web Push/LINE の告知を行う。
+    /// 対象が優先待機でない場合は null を返す。
+    /// </summary>
+    Task<ParticipationGroup?> CallInterruptedGroupAsync(Event ev, Guid groupDisplayId);
+
     // ※「再呼び出し(CallAgain)」は管理向け(CallController)側の責務のため、ここでは提供しない(§6.2)
 
     /// <summary>
@@ -108,6 +115,38 @@ public class QueueCallService(
     public Task<ParticipationGroup?> CallNextAsync(Event ev)
     {
         return InEventLockAsync(ev, () => CallNextCoreAsync(ev));
+    }
+
+    /// <summary>
+    /// 優先待機(Interrupted/割り込みプール)のグループをスタッフが直接呼び出す。
+    /// 新しいゲーム参加枠(GameSlotId)を付与して Calling へ移し、CallNext と同様の告知を行う。
+    /// これにより「代表者のチェックインを待たずに」優先プールのグループを任意のタイミングで呼び出せる。
+    /// </summary>
+    public Task<ParticipationGroup?> CallInterruptedGroupAsync(Event ev, Guid groupDisplayId)
+    {
+        return InEventLockAsync(ev, async () =>
+        {
+            var group = await groupRepository.FindByDisplayIdAsync(groupDisplayId);
+            if (group == null)
+            {
+                return null;
+            }
+            // ロック取得後に DB の最新値を再読み込みする(CompleteCheckinAsync と同じ理由)
+            await db.Entry(group).ReloadAsync();
+            if (group.Status != GroupStatus.Interrupted)
+            {
+                // 優先待機以外(呼び出し中/待機中/完了等)は対象外
+                return null;
+            }
+
+            group.Status = GroupStatus.Calling;
+            group.CalledAt = DateTimeOffset.UtcNow;
+            group.GameSlotId = Guid.CreateVersion7();
+            await groupRepository.SaveChangesAsync();
+
+            await AnnounceAsync(ev, group);
+            return group;
+        });
     }
 
     /// <summary>CallNextAsync の本体(イベントロック内で実行される)</summary>
