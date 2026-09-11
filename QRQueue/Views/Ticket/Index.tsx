@@ -121,8 +121,11 @@ export default function Index({ model }: { model: Model }) {
                 ticket: "チケットが見つかりませんでした。受付取消・引き継ぎされていないか確認してください",
                 invalid_request: "連携のパラメータが不正でした。電子券ページからもう一度やり直してください",
                 exception: "連携処理中にエラーが発生しました。もう一度お試しください",
+                idtoken_absent: "LINEがユーザー情報(id_token)を返しませんでした。LINE Loginチャネルの設定(スコープ・コールバックURL)を確認してください [idtoken_absent]",
+                idtoken_sub: "LINEのid_tokenにユーザーIDが含まれていませんでした。LINE Loginチャネルでopenidスコープが有効か確認してください [idtoken_sub]",
+                profile: "LINEのプロフィールAPIが失敗しました(コード末尾の数字がHTTPステータス)。アクセストークンのスコープやLINEサーバー側の状態を確認してください",
             };
-            setNotice(`❌ LINE連携に失敗しました: ${reasonText[reason] ?? reasonText.invalid_request} [原因コード: ${reason}]`);
+            setNotice(`❌ LINE連携に失敗しました: ${reasonText[reason] ?? reasonText[reason.replace(/\d+$/, "")] ?? reasonText.invalid_request} [原因コード: ${reason}]`);
             setNoticeKind("error");
             window.history.replaceState(null, "", window.location.pathname);
         }
