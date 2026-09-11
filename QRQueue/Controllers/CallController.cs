@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -261,76 +261,6 @@ namespace QRQueue.Controllers
                 return Conflict("優先待機(割り込みプール)のグループのみ直接呼び出せます");
             }
             return Ok(new { groupNumber = group.Number, status = GroupStatus.Calling.ToString() });
-        }
-
-        /// <summary>
-        /// ゲーム終了の確定(issue #71)。
-        /// チェックイン済み(Completed)グループの有効チケットを「使用済み(Used)」にする。
-        /// groupNumber 未指定の場合は、直近に呼び出された枠(CalledAt が最大の Completed
-        /// グループ群=同時呼び出しされたグループ全体)を対象とする。
-        /// ※ Updated はレコード作成時刻のみを反映するため直近特定には使えない(レビュー指摘)。
-        /// 使用済みチケットは再チェックイン・再呼び出しの対象にならず、
-        /// 同じ参加者は新しいチケットで再度受付できる。
-        /// </summary>
-        [Authorize(Policy = "CallExecute")]
-        [HttpPut("done/{eventDisplayId}")]
-        public async Task<IActionResult> Done(Guid eventDisplayId, [FromBody] long? groupNumber)
-        {
-            var query = _db.ParticipationGroups
-                .Include(g => g.Tickets)
-                .Where(g => g.Event.DisplayId == eventDisplayId);
-
-            List<ParticipationGroup> targets;
-            if (groupNumber.HasValue)
-            {
-                var group = await query.FirstOrDefaultAsync(g => g.Number == groupNumber.Value);
-                if (group == null)
-                {
-                    return NotFound();
-                }
-                targets = new List<ParticipationGroup> { group };
-            }
-            else
-            {
-                // 直近に呼び出された枠(同時呼び出しされたグループ群)をまとめて対象にする
-                var latestCalledAt = await query
-                    .Where(g => g.Status == GroupStatus.Completed && g.CalledAt != null)
-                    .MaxAsync(g => (DateTimeOffset?)g.CalledAt);
-                if (latestCalledAt == null)
-                {
-                    return NotFound();
-                }
-                targets = await query
-                    .Where(g => g.Status == GroupStatus.Completed && g.CalledAt == latestCalledAt)
-                    .ToListAsync();
-            }
-
-            if (targets.Any(g => g.Status != GroupStatus.Completed))
-            {
-                return Conflict("チェックイン済みのグループのみ使用済みにできます");
-            }
-
-            var usedTickets = 0;
-            foreach (var group in targets)
-            {
-                foreach (var ticket in group.Tickets.Where(t => t.Status == TicketStatus.Registered))
-                {
-                    ticket.Status = TicketStatus.Used;
-                    usedTickets++;
-                }
-            }
-            await _db.SaveChangesAsync();
-
-            var ev = await _db.Events.FirstAsync(x => x.DisplayId == eventDisplayId);
-            await _hubContext.Clients.Group(eventDisplayId.ToString()).SendAsync("QueueChanged");
-
-            return Ok(new
-            {
-                groupNumber = targets.First().Number,
-                groupNumbers = targets.Select(g => g.Number),
-                usedTickets = usedTickets,
-                eventName = ev.Name
-            });
         }
 
         [Authorize(Policy = "CallView")]

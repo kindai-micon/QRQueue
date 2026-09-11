@@ -227,6 +227,8 @@ namespace QRQueue.Controllers
         /// Calling なら Completed に確定して AutoNext を発火。Interrupted なら同様に完了し、
         /// 次の呼び出しに割り込んで処理対象にする。Waiting/Matching なら 409。
         /// 代表者でない場合も 409。
+        /// チェックイン成功時はグループのチケットを自動で使用済み(Used)にするとともに、
+        /// 参加者cookie を削除する(同じ端末からは新規参加として再登録できる)。
         /// issue #68: 受付に掲示された確認用QR(到着確認コード付きURL)から開かれた
         /// リクエストのみ受け付ける。確認コードが無効・欠落の場合は理由とともに 403。
         /// </summary>
@@ -277,7 +279,8 @@ namespace QRQueue.Controllers
                 case GroupStatus.Waiting:
                     return Conflict(new ApiMessage("まだ呼び出されていません"));
                 case GroupStatus.Completed:
-                    // 既にチェックイン済み(冪等)
+                    // 既にチェックイン済み(冪等)。cookie はここで削除する
+                    await HttpContext.SignOutAsync("Participant");
                     return new CheckinResult(group.Number, group.Status);
             }
 
@@ -295,6 +298,9 @@ namespace QRQueue.Controllers
             // 同時に利用できるゲーム枠が1枠のため、到着確認だけが連鎖して呼び出しが進むと
             // 受付場所に待機列ができてしまう。次の呼び出しはスタッフが呼び出しコンソールの
             // 「次を呼ぶ」(PUT /api/call/next/{eventDisplayId})から実行する。
+            // チェックイン成功時は参加者cookieを削除する(チケットは使用済み確定済み。
+            // 同じ端末からは新規参加として再登録できる)
+            await HttpContext.SignOutAsync("Participant");
             return new CheckinResult(group.Number, group.Status);
         }
 
