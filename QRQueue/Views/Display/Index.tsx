@@ -20,16 +20,21 @@ export default function Display({ model }: { model: Model }) {
     // 呼び出し読み上げ(音声合成)。投影画面ごとにトグルで ON/OFF を指定し、
     // ON にしたこの画面だけが読み上げる(他の画面では音が出ない)。
     // 設定は localStorage に永続化し、再読み込み後も引き継ぐ。
+    // 注意: このページは SSR(ServerAndClient)でサーバー側でも初期化されるため、
+    // ブラウザ API へのアクセスは必ず存在チェックをしてから行う。
     const speechSupported = isSpeechSupported();
-    const [ttsOn, setTtsOn] = useState(() => localStorage.getItem("displayTts") === "1");
+    const [ttsOn, setTtsOn] = useState(() =>
+        typeof localStorage !== "undefined" && localStorage.getItem("displayTts") === "1");
     const ttsRef = useRef(ttsOn);
 
     function toggleTts() {
         setTtsOn((on) => {
             const next = !on;
             ttsRef.current = next;
-            localStorage.setItem("displayTts", next ? "1" : "0");
-            if (!next) window.speechSynthesis?.cancel();
+            if (typeof localStorage !== "undefined") {
+                localStorage.setItem("displayTts", next ? "1" : "0");
+            }
+            if (typeof window !== "undefined" && !next) window.speechSynthesis?.cancel();
             return next;
         });
     }
