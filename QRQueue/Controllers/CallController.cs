@@ -49,6 +49,7 @@ namespace QRQueue.Controllers
         /// 30秒で回転する到着確認コードを含むURLのQRを返す。
         /// 受付画面(/checkin-qr/{eventDisplayId})がこの間隔で再読み込みして表示する。
         /// 撮影・共有されたQRはコード失効後に使用できない。
+        /// 固定版は別途 掲示PDF(GET /api/pdf/checkin/{eventDisplayId})で発行する。
         /// </summary>
         [Authorize(Policy = "CallView")]
         [HttpGet("checkin-qrcode/{eventDisplayId}")]
@@ -61,6 +62,25 @@ namespace QRQueue.Controllers
             }
             var code = await _checkinCodeService.GetCurrentCheckinCodeAsync(eventDisplayId);
             var url = $"{_baseUrlResolver.Resolve(Request)}/checkin/{eventDisplayId}?rc={code}";
+            return File(_qrCodeGenerator.GeneratePng(url, 400, 400), "image/png");
+        }
+
+        /// <summary>
+        /// 参加登録QRのPNG。Web掲示画面(/entry-qr/{eventDisplayId})用。
+        /// チェックインQRと同じ仕様: 画面表示は30秒で回転する到着確認コードを含むURLのQRを返す。
+        /// 掲示画面がこの間隔で再読み込みして表示する。固定版は別途 掲示PDF(GET /api/pdf/entry/{eventDisplayId})で発行する。
+        /// </summary>
+        [Authorize(Policy = "CallView")]
+        [HttpGet("entry-qrcode/{eventDisplayId}")]
+        public async Task<IActionResult> EntryQrCode(Guid eventDisplayId)
+        {
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+            var code = await _checkinCodeService.GetCurrentCheckinCodeAsync(eventDisplayId);
+            var url = $"{_baseUrlResolver.Resolve(Request)}/entry/{eventDisplayId}?rc={code}";
             return File(_qrCodeGenerator.GeneratePng(url, 400, 400), "image/png");
         }
 
@@ -278,13 +298,32 @@ namespace QRQueue.Controllers
             // 一定時間を超えた未到着グループを優先待機へ退避(issue #69)
             await _queueCallService.EvacuateExpiredSlotGroupsAsync(ev);
 
-            var waitingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Waiting).OrderBy(x => x.Number).ToListAsync();
+            // ステータス別のグループ取得を1クエリに統合(ポーリング対象のホットパスのため)。
+            // Waiting/CalledAt順はメモリ側で並べ替えて従来と同じ順序を維持する。
+            var activeGroups = await _db.ParticipationGroups
+                .Include(x => x.Tickets)
+                .Where(x => x.Event.DisplayId == eventDisplayId &&
+                    (x.Status == GroupStatus.Waiting ||
+                     x.Status == GroupStatus.Calling ||
+                     x.Status == GroupStatus.Interrupted ||
+                     x.Status == GroupStatus.Matching))
+                .ToListAsync();
 
-            var callingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Calling).OrderBy(x => x.CalledAt).ToListAsync();
-
-            var interruptedGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Interrupted).OrderBy(x => x.Number).ToListAsync();
-
-            var matchingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Matching).ToListAsync();
+            var waitingGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Waiting)
+                .OrderBy(x => x.Number)
+                .ToList();
+            var callingGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Calling)
+                .OrderBy(x => x.CalledAt)
+                .ToList();
+            var interruptedGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Interrupted)
+                .OrderBy(x => x.Number)
+                .ToList();
+            var matchingGroups = activeGroups
+                .Where(x => x.Status == GroupStatus.Matching)
+                .ToList();
 
             view.WaitingGroup = waitingGroups.Select(x => new ParticipationGroupView()
             {

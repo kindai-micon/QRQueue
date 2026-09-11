@@ -2,21 +2,39 @@ using System.Security.Claims;
 using JsxCore;
 using JsxCore.Mvc;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using QRQueue.Models;
 using QRQueue.Repositories;
+using QRQueue.Services;
 
 namespace QRQueue.Controllers
 {
     // JsxCore View へのページルーティング(SvelteKit から全面移行)。
     // 旧 Program.cs の MapGet 群を MVC コントローラに集約したもの。
+    //
+    // レンダリング方針(SSR活用):
+    // - 参加/公開ページ は RenderMode.ServerAndClient。コントローラで実データを取得して
+    //   モデルの initial に載せることで、初回HTMLに実コンテンツが入る(ファーストペイント高速化)。
+    //   ビューは initial を初期状態に使い、以後は SignalR/ポーリングで更新する。
+    // - 管理画面系(ログイン後・初期データなし)は Client。SSRが描くのはスケルトンだけで
+    //   毎リクエストのサーバー側JS実行と hydration の二重コストを避ける。
     [Controller]
-    public class PageController(ITicketRepository tickets) : ControllerBase
+    public class PageController(
+        ITicketStatusService ticketStatus,
+        IParticipationGroupRepository groups,
+        ITicketRepository tickets) : ControllerBase
     {
-        private static JsxViewResult Page(string view, object model) =>
-            new(view, model, RenderMode.ServerAndClient);
+        private static JsxViewResult Page(string view, object model,
+            RenderMode mode = RenderMode.ServerAndClient) =>
+            new(view, model, mode);
+
+        // 管理画面系(ログイン必須・初期データはクライアントfetch)は Client で応答する
+        private static JsxViewResult AdminPage(string view, object model) =>
+            new(view, model, RenderMode.Client);
 
         [HttpGet("/")]
-        public IActionResult Index() => Page("Home/Index", new { });
+        public IActionResult Index() => AdminPage("Home/Index", new { });
 
         [HttpGet("/initial")]
         public IActionResult Initial() => Page("Initial/Index", new { });
@@ -26,45 +44,73 @@ namespace QRQueue.Controllers
 
         // ログイン中ユーザー自身のパスワード変更ページ
         [HttpGet("/account/password")]
-        public IActionResult ChangePassword() => Page("Account/Password", new { });
+        public IActionResult ChangePassword() => AdminPage("Account/Password", new { });
 
         [HttpGet("/roles")]
-        public IActionResult Roles() => Page("Roles/Index", new { });
+        public IActionResult Roles() => AdminPage("Roles/Index", new { });
 
         [HttpGet("/users")]
-        public IActionResult Users() => Page("Users/Index", new { });
+        public IActionResult Users() => AdminPage("Users/Index", new { });
 
         [HttpGet("/users/{username}")]
-        public IActionResult UserDetail(string username) => Page("Users/Detail", new { username });
+        public IActionResult UserDetail(string username) => AdminPage("Users/Detail", new { username });
 
         [HttpGet("/admin/delete-data")]
-        public IActionResult DeleteData() => Page("Admin/DeleteData", new { });
+        public IActionResult DeleteData() => AdminPage("Admin/DeleteData", new { });
 
         [HttpGet("/event")]
-        public IActionResult Events() => Page("Event/Index", new { });
+        public IActionResult Events() => AdminPage("Event/Index", new { });
 
         [HttpGet("/event/{eventid}")]
-        public IActionResult EventDetail(string eventid) => Page("Event/Detail", new { eventId = eventid });
+        public IActionResult EventDetail(string eventid) => AdminPage("Event/Detail", new { eventId = eventid });
 
         [HttpGet("/event/{eventid}/publishing")]
-        public IActionResult Publishing(string eventid) => Page("Event/Publishing", new { eventId = eventid });
+        public IActionResult Publishing(string eventid) => AdminPage("Event/Publishing", new { eventId = eventid });
 
         [HttpGet("/event/{eventid}/call")]
-        public IActionResult Call(string eventid) => Page("Event/Call", new { eventId = eventid });
+        public IActionResult Call(string eventid) => AdminPage("Event/Call", new { eventId = eventid });
 
         [HttpGet("/event/{eventid}/queue")]
-        public IActionResult Queue(string eventid) => Page("Event/Queue", new { eventId = eventid });
+        public IActionResult Queue(string eventid) => AdminPage("Event/Queue", new { eventId = eventid });
 
         // 受付確認QRの自動更新表示(issue #76)
         [HttpGet("/checkin-qr/{eventid}")]
         public IActionResult CheckinQr(string eventid) => Page("Event/CheckinQr", new { eventId = eventid });
 
-        [HttpGet("/ticket/{ticketid}")]
-        public IActionResult Ticket(string ticketid) => Page("Ticket/Index", new { ticketId = ticketid });
+        // 参加登録QRの掲示表示(固定QR)
+        [HttpGet("/entry-qr/{eventid}")]
+        public IActionResult EntryQr(string eventid) => Page("Event/EntryQr", new { eventId = eventid });
 
-        // 参加者向け匿名ページ(設計書)
+        // 電子券ページ(SSR): 本人/同行者/スタッフのときだけ初期データを埋め込む。
+        // 認可で弾かれた場合(第三者アクセス)は初期データなしで応答し、
+        // クライアントの API 呼び出し(API は 404)と同じ「見つかりません」表示になる。
+        [HttpGet("/ticket/{ticketid}")]
+        public async Task<IActionResult> Ticket(string ticketid)
+        {
+            var (token, isStaff) = await ResolveViewerAsync();
+            Guid.TryParse(ticketid, out var displayId);
+            var initial = await ticketStatus.GetStatusAsync(displayId, token, isStaff);
+            return Page("Ticket/Index", new { ticketId = ticketid, initial });
+        }
+
+        // グループ参加確認ページ(SSR): 招待QRの飛び先。グループ情報を初期データとして埋め込む。
         [HttpGet("/join/{token}")]
-        public IActionResult Join(string token) => Page("Entry/Join", new { joinToken = token });
+        public async Task<IActionResult> Join(string token)
+        {
+            Models.API.GroupInfoView? initial = null;
+            var group = await groups.FindByJoinTokenAsync(token);
+            if (group != null)
+            {
+                var memberCount = EntryController.ActiveMemberCount(group);
+                var isDraft = group.Status == GroupStatus.Draft;
+                initial = new Models.API.GroupInfoView(
+                    group.Number,
+                    memberCount,
+                    memberCount >= EntryController.MaxGroupSize,
+                    (isDraft || group.Status == GroupStatus.Waiting) && memberCount < EntryController.MaxGroupSize);
+            }
+            return Page("Entry/Join", new { joinToken = token, initial });
+        }
 
         // チケット引き継ぎ(別端末への復元、issue #75)
         [HttpGet("/transfer")]
@@ -92,6 +138,20 @@ namespace QRQueue.Controllers
                 }
             }
             return Page("Entry/Index", new { eventId = eventid });
+        }
+
+        /// <summary>
+        /// 電子券SSR用の閲覧者情報: 参加者cookieの participantToken とスタッフログインの有無。
+        /// OnValidatePrincipal でDB照合済みのため、失効トークンは null 扱い。
+        /// </summary>
+        private async Task<(Guid? participantToken, bool isStaff)> ResolveViewerAsync()
+        {
+            var participantAuth = await HttpContext.AuthenticateAsync("Participant");
+            Guid? token = participantAuth.Principal != null &&
+                Guid.TryParse(participantAuth.Principal.FindFirstValue("participantToken"), out var t)
+                ? t : null;
+            var isStaff = (await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme)).Succeeded;
+            return (token, isStaff);
         }
     }
 }

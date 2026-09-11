@@ -5,12 +5,15 @@ import { readErrorMessage, TICKET_STATUS_LABEL, type TicketView, type VapidPubli
 
 type Model = {
     ticketId: string;
+    // SSR初期データ: コントローラが埋め込んだ電子券状態(本人/同行者/スタッフのみ)。
+    // あれば初回fetchをスキップしてサーバー描画の内容をそのまま初期表示する。
+    initial?: TicketView | null;
 };
 
 // 電子券画面(参加証そのもの、設計書 /ticket/[ticketid] 改造)
 export default function Index({ model }: { model: Model }) {
-    const [ticketData, setTicketData] = useState<TicketView | null>(null);
-    const [loaded, setLoaded] = useState(false);
+    const [ticketData, setTicketData] = useState<TicketView | null>(model.initial ?? null);
+    const [loaded, setLoaded] = useState<boolean>(model.initial != null);
     const [notifications, setNotifications] = useState<string[]>([]);
     const [notification, setNotification] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
@@ -476,7 +479,17 @@ export default function Index({ model }: { model: Model }) {
             } catch (err) {
                 console.error("SignalR connection setup error:", err);
             }
-            await load();
+            if (model.initial) {
+                // SSR初期データで表示済み: 初回fetchをスキップし、SignalRグループ参加と
+                // LINE連携状態の同期のみ行う(以後の更新はイベント/ポーリングで load が走る)
+                joinedEventId = model.initial.eventId ?? null;
+                if (joinedEventId && connection?.state === "Connected") {
+                    await connection.invoke("SetEvent", joinedEventId).catch((err) => console.error("SignalR SetEvent error:", err));
+                }
+                await loadLineStatus();
+            } else {
+                await load();
+            }
             if (!disposed) {
                 setLoaded(true);
                 // 通知を取りこぼした場合のバックストップ(15秒)
