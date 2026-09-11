@@ -239,6 +239,40 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
+        /// メンバー(チケット)個人宛に呼び出し通知を送る。
+        /// グループ全体ではなく特定の個人だけに呼び出しを知らせたい場合にスタッフが使用する。
+        /// 対象は呼び出し中(Calling)または優先待機(Interrupted)グループの有効チケット。
+        /// Web Push と LINE(連携済みの場合)の両方に送る。
+        /// </summary>
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("ticket/{ticketDisplayId}/notify")]
+        public async Task<IActionResult> NotifyTicket(Guid ticketDisplayId)
+        {
+            var ticket = await _db.Tickets
+                .Include(t => t.ParticipationGroup).ThenInclude(g => g!.Event)
+                .FirstOrDefaultAsync(t => t.DisplayId == ticketDisplayId);
+            if (ticket == null)
+            {
+                return NotFound();
+            }
+            if (ticket.Status != TicketStatus.Registered)
+            {
+                return Conflict("無効になったチケットには通知を送れません");
+            }
+            var group = ticket.ParticipationGroup;
+            if (group == null || group.Status is not (GroupStatus.Calling or GroupStatus.Interrupted))
+            {
+                return Conflict("呼び出し中または優先待機のグループのチケットのみ通知を送れます");
+            }
+
+            await _pushSubscriptionService.SendNotifyTicketAsync(ticket, "呼び出し",
+                $"{group.Event.Name}:あなたのグループ({group.Number}番)が呼び出されています。ブースまでお越しください");
+            await _lineService.SendNotifyAsync([ticket.DisplayId],
+                $"{group.Event.Name}で{group.Number}番グループが呼び出されています。ブースまでお越しください");
+            return Ok();
+        }
+
+        /// <summary>
         /// ゲーム終了の確定(issue #71)。
         /// チェックイン済み(Completed)グループの有効チケットを「使用済み(Used)」にする。
         /// groupNumber 未指定の場合は、直近に呼び出された枠(CalledAt が最大の Completed
@@ -331,29 +365,9 @@ namespace QRQueue.Controllers
 
             var matchingGroups = await _db.ParticipationGroups.Include(x => x.Tickets).Where(x => x.Event.DisplayId == eventDisplayId && x.Status == GroupStatus.Matching).ToListAsync();
 
-            view.WaitingGroup = waitingGroups.Select(x => new ParticipationGroupView()
-            {
-                Number = x.Number,
-                People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status,
-                DisplayId = x.DisplayId
-            });
-
-            view.CallingGroup = callingGroups.Select(x => new ParticipationGroupView()
-            {
-                Number = x.Number,
-                People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status,
-                DisplayId = x.DisplayId
-            });
-
-            view.InterruptedGroup = interruptedGroups.Select(x => new ParticipationGroupView()
-            {
-                Number = x.Number,
-                People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
-                Status = x.Status,
-                DisplayId = x.DisplayId
-            });
+            view.WaitingGroup = waitingGroups.Select(x => ToView(x));
+            view.CallingGroup = callingGroups.Select(x => ToView(x));
+            view.InterruptedGroup = interruptedGroups.Select(x => ToView(x));
 
             view.PeoplePool = matchingGroups.Sum(x => x.Tickets.Count(t => t.Status != TicketStatus.Cancelled));
 
@@ -393,6 +407,22 @@ namespace QRQueue.Controllers
             }
 
             return view;
+        }
+
+        /// <summary>グループと有効チケット一覧をスタッフ向けビューへ変換する</summary>
+        private static ParticipationGroupView ToView(ParticipationGroup x)
+        {
+            return new ParticipationGroupView()
+            {
+                Number = x.Number,
+                People = x.Tickets.Count(t => t.Status != TicketStatus.Cancelled),
+                Status = x.Status,
+                DisplayId = x.DisplayId,
+                Tickets = x.Tickets
+                    .Where(t => t.Status != TicketStatus.Cancelled)
+                    .Select(t => new TicketRefView { DisplayId = t.DisplayId })
+                    .ToList(),
+            };
         }
     }
 }

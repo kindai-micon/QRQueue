@@ -12,6 +12,10 @@ export type GroupView = {
     number: number;
     people: number;
     status: GroupStatus;
+    // スタッフ操作(優先待機移動・棄権・直接呼び出し)の対象指定に使うグループID(issue #73)
+    displayId?: string;
+    // グループ内の有効チケット(メンバー個人宛通知の対象指定に使う)
+    tickets?: { displayId: string }[];
 };
 
 // GET /api/call/queue/{eventDisplayId} のレスポンス(QueueView)

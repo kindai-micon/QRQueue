@@ -129,10 +129,20 @@ export default function Call({ model }: { model: Model }) {
             op === "interrupt" ? "優先待機へ移動しました" : "棄権処理を行いました(チケットを無効化しました)");
     }
 
-    const groupTable = (groups: GroupView[]) => (
+    // メンバー(チケット)個人宛に通知を送る(スタッフ操作)。
+    async function notifyTicket(g: GroupView, ticketDisplayId: string, memberIndex: number) {
+        if (!confirm(`${g.number}番のメンバー${memberIndex + 1}に呼び出し通知を送りますか?`)) return;
+        action("notify-ticket",
+            () => fetch(`/api/call/ticket/${ticketDisplayId}/notify`, { method: "PUT" }),
+            `メンバー${memberIndex + 1}に通知を送りました(Web Push・LINE)`);
+    }
+
+    const groupTable = (groups: GroupView[], actions?: { call?: (g: GroupView) => void; notify?: boolean }) => {
+        const hasOps = actions?.call != null || actions?.notify === true;
+        return (
         <table class="data-table">
             <thead>
-                <tr><th>番号</th><th>人数</th><th>状態</th></tr>
+                <tr><th>番号</th><th>人数</th><th>状態</th>{hasOps && <th>操作</th>}</tr>
             </thead>
             <tbody>
                 {groups.map((g, i) => (
@@ -140,12 +150,42 @@ export default function Call({ model }: { model: Model }) {
                         <td>{g.number}</td>
                         <td>{g.people}</td>
                         <td>{groupStatusLabel(g.status)}</td>
+                        {hasOps && (
+                            <td class="group-ops">
+                                {actions?.call && (
+                                    <button
+                                        class="btn-secondary btn-sm"
+                                        disabled={busy}
+                                        onClick={() => actions.call!(g)}
+                                    >
+                                        📣 呼び出す
+                                    </button>
+                                )}
+                                {actions?.notify && (g.tickets?.length ?? 0) > 0 && (
+                                    <details class="ticket-notify">
+                                        <summary>🔔 個別通知</summary>
+                                        <div class="ticket-notify-members">
+                                            {g.tickets!.map((t, j) => (
+                                                <button
+                                                    class="btn-secondary btn-sm"
+                                                    disabled={busy}
+                                                    onClick={() => notifyTicket(g, t.displayId, j)}
+                                                >
+                                                    メンバー{j + 1}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
+                            </td>
+                        )}
                     </tr>
                 ))}
-                {groups.length === 0 && <tr><td colSpan={3}>—</td></tr>}
+                {groups.length === 0 && <tr><td colSpan={hasOps ? 4 : 3}>—</td></tr>}
             </tbody>
         </table>
-    );
+        );
+    };
 
     return (
         <Layout title="呼び出しコンソール | QRQueue">
@@ -276,11 +316,14 @@ export default function Call({ model }: { model: Model }) {
                     </section>
                     <section class="call-panel">
                         <h2>現在の呼び出し中</h2>
-                        {groupTable(queue?.callingGroup ?? [])}
+                        {groupTable(queue?.callingGroup ?? [], { notify: true })}
                     </section>
                     <section class="call-panel">
                         <h2>割り込みプール(代表者チェックインで優先)</h2>
-                        {groupTable(queue?.interruptedGroup ?? [])}
+                        {groupTable(queue?.interruptedGroup ?? [], { notify: true })}
+                        <p class="call-hint">
+                            「🔔 個別通知」でグループ内の特定メンバーだけに通知を送れます。
+                        </p>
                     </section>
                     <section class="call-panel">
                         <h2>呼び出し待ち(正常キュー)</h2>

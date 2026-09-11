@@ -42,3 +42,16 @@
 .slot-title { font-weight: 700; margin-bottom: 0.4rem; }
 .slot-time { font-weight: 400; font-size: 0.8rem; color: #888; margin-left: 0.4rem; }
 @media (max-width: 700px) { .call-panels { grid-template-columns: 1fr; } }
+
+
+/* メンバー(チケット)個別通知 */
+.ticket-notify { display: inline-block; }
+.ticket-notify > summary {
+    cursor: pointer; list-style: none; color: #1565c0;
+    border: 1px solid #90caf9; border-radius: 4px;
+    padding: 0.2rem 0.5rem; font-size: 0.8rem; white-space: nowrap;
+}
+.ticket-notify > summary::-webkit-details-marker { display: none; }
+.ticket-notify-members { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.35rem; }
+.ticket-notify-members .btn-sm { white-space: nowrap; }
+.group-ops { display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; }
