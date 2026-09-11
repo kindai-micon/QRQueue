@@ -227,7 +227,10 @@ export default function Index({ model }: { model: Model }) {
                             <div class="entry-qr">
                                 <img
                                     src={`/api/entry/group/${joinToken}/qrcode`}
-                                    alt="グループ参加用QRコード"
+                                    alt="グループ参加QR"
+                                    width={260}
+                                    height={260}
+                                    style={{ maxWidth: "100%" }}
                                 />
                             </div>
                             <button

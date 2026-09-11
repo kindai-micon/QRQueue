@@ -57,7 +57,8 @@ namespace QRQueue.Controllers
                 ev.Name,
                 ev.Status,
                 ev.Status == EventStatus.Open,
-                3);
+                3,
+                ev.AutoNextEnabled);
         }
 
         /// <summary>
@@ -135,6 +136,9 @@ namespace QRQueue.Controllers
                     // 採番(Serializable トランザクション内でグループ・チケットも一緒に保存される)
                     await groupNumberIssuanceService.IssueNumberAsync(group);
                     await NotifyJoinedAsync(ev);
+                    // 自動呼出し有効で呼び出し中がいなければ、新規待機グループを即座に呼び出す
+                    // (呼び出し中の全員が離脱した後に新規チケットが発行されたケースの救済)
+                    await queueCallService.AutoCallIfIdleAsync(ev);
                     result = new JoinResult(ticket.DisplayId.ToString(), group.Number, null);
                     break;
                 }
@@ -160,6 +164,11 @@ namespace QRQueue.Controllers
                     if (pool.Count >= ev.AutoGroupSize)
                     {
                         formed = await queueCallService.FormGroupFromMatchingPoolAsync(ev, ev.AutoGroupSize);
+                        if (formed != null)
+                        {
+                            // 満員成立で待機グループができた場合も自動呼出しを試みる
+                            await queueCallService.AutoCallIfIdleAsync(ev);
+                        }
                     }
                     await NotifyJoinedAsync(ev);
 
@@ -503,6 +512,8 @@ namespace QRQueue.Controllers
             await groupNumberIssuanceService.IssueNumberAsync(group);
             await groupRepository.SaveChangesAsync();
             await NotifyJoinedAsync(ev!);
+            // 自動呼出し有効で呼び出し中がいなければ、確定した待機グループを即座に呼び出す
+            await queueCallService.AutoCallIfIdleAsync(ev!);
 
             return Ok(new { groupNumber = group.Number });
         }

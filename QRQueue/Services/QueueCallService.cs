@@ -61,6 +61,15 @@ public interface IQueueCallService
     Task<ParticipationGroup?> CompleteCheckinAsync(Event ev, Guid groupId);
 
     /// <summary>
+    /// 待機列に新規グループが載ったとき、イベントの自動呼出しが有効かつ
+    /// 現在呼び出し中のグループがいなければ次の呼び出しを自動で行う。
+    /// (チェックイン完了後の AutoNext は CompleteCheckinAsync 内で発火するため、
+    ///  こちらは「呼び出し中が空いてから新しいチケットが発行された」ケースを拾う)
+    /// 呼び出しが行われた(または既に呼び出し中/自動呼出し無効の)場合はその結果を返す。
+    /// </summary>
+    Task<ParticipationGroup?> AutoCallIfIdleAsync(Event ev);
+
+    /// <summary>
     /// 同一イベントに対する更新処理を直列化して実行する(issue #82)。
     /// 再呼び出し(CallAgain)など、状態を更新する管理操作から利用する。
     /// </summary>
@@ -116,6 +125,33 @@ public class QueueCallService(
     public Task<ParticipationGroup?> CallNextAsync(Event ev)
     {
         return InEventLockAsync(ev, () => CallNextCoreAsync(ev));
+    }
+
+    /// <summary>
+    /// 呼び出し中のグループが誰もいなくなった(全員キャンセル・棄権・チェックイン完了など)後に
+    /// 新たなチケット(待機グループ)が発行されたケースでも自動呼出しが走るようにする。
+    /// 自動呼出しが無効、または既に呼び出し中のグループがいれば何もしない。
+    /// </summary>
+    public Task<ParticipationGroup?> AutoCallIfIdleAsync(Event ev)
+    {
+        return InEventLockAsync(ev, async () =>
+        {
+            // ロック取得後に DB の最新値を再読み込みする(他操作による切替を反映)
+            await db.Entry(ev).ReloadAsync();
+            if (!ev.AutoNextEnabled)
+            {
+                return null;
+            }
+
+            var calling = await groupRepository.GetCallingAsync(ev.Id);
+            if (calling.Count > 0)
+            {
+                // まだ呼び出し処理中の枠があるため自動呼出しは不要
+                return null;
+            }
+
+            return await CallNextCoreAsync(ev);
+        });
     }
 
     /// <summary>
@@ -351,7 +387,11 @@ public class QueueCallService(
 
             // 正常キューから呼び出されていたグループのチェックイン完了をトリガーに AutoNext。
             // 同一ロック内で実行されるため、退避→呼び出しの過程で他の操作が介入しない。
-            await CallNextCoreAsync(ev);
+            // 自動呼出しがオフのイベントではスタッフの「次を呼ぶ」のみで進める。
+            if (ev.AutoNextEnabled)
+            {
+                await CallNextCoreAsync(ev);
+            }
             return group;
         });
     }

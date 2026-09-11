@@ -661,7 +661,7 @@ export default function Index({ model }: { model: Model }) {
                                 <div>呼び出されました！</div>
                                 <div class="alert-sub">
                                     受付に掲示された<strong>チェックインQR</strong>を読み取って、
-                                    到着を確認してください(issue #68: 電子券画面からは直接チェックインできません)。
+                                    到着を確認してください(電子券画面からは直接チェックインできません)。
                                 </div>
                             </div>
                         )}
