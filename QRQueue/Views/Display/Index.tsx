@@ -1,7 +1,8 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import type { EventInfoView, QueueView } from "@/Shared/api";
+import { isSpeechSupported, speakCallAnnouncement } from "@/Shared/speech";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -15,6 +16,23 @@ export default function Display({ model }: { model: Model }) {
     const [history, setHistory] = useState<number[]>([]);
     const [flash, setFlash] = useState(false);
     const [denied, setDenied] = useState(false);
+
+    // 呼び出し読み上げ(音声合成)。投影画面ごとにトグルで ON/OFF を指定し、
+    // ON にしたこの画面だけが読み上げる(他の画面では音が出ない)。
+    // 設定は localStorage に永続化し、再読み込み後も引き継ぐ。
+    const speechSupported = isSpeechSupported();
+    const [ttsOn, setTtsOn] = useState(() => localStorage.getItem("displayTts") === "1");
+    const ttsRef = useRef(ttsOn);
+
+    function toggleTts() {
+        setTtsOn((on) => {
+            const next = !on;
+            ttsRef.current = next;
+            localStorage.setItem("displayTts", next ? "1" : "0");
+            if (!next) window.speechSynthesis?.cancel();
+            return next;
+        });
+    }
 
     useEffect(() => {
         (async () => {
@@ -55,6 +73,10 @@ export default function Display({ model }: { model: Model }) {
                         setHistory((h) => [current, ...h.filter((n) => n !== current)].slice(0, 6));
                         setFlash(true);
                         setTimeout(() => setFlash(false), 1600);
+                        // 読み上げが有効な表示画面のみ音声アナウンス
+                        if (ttsRef.current) {
+                            speakCallAnnouncement(current, data.callingGroup[0]?.people ?? 1);
+                        }
                     }
                     lastCalling = current;
                 }
@@ -122,7 +144,29 @@ export default function Display({ model }: { model: Model }) {
         <Layout chrome="header" title="呼び出し表示 | QRQueue">
             <link rel="stylesheet" href="/css/display.css" />
             <div class="display-screen">
-                <div class="display-event">{eventName}</div>
+                <div class="display-event">
+                    {eventName}
+                    {speechSupported && (
+                        <span class="display-tts-controls">
+                            <button
+                                class={`display-tts-toggle ${ttsOn ? "display-tts-on" : ""}`}
+                                onClick={toggleTts}
+                                title="この画面で呼び出し番号を音声読み上げします(ONにした画面だけ鳴ります)"
+                            >
+                                {ttsOn ? "🔊 読み上げ ON" : "🔇 読み上げ OFF"}
+                            </button>
+                            {ttsOn && (
+                                <button
+                                    class="display-tts-toggle"
+                                    onClick={() => speakCallAnnouncement(calling?.number ?? 1001, calling?.people ?? 1)}
+                                    title="読み上げの音量を確認できます(ブラウザの音声再生許可もここで与えられます)"
+                                >
+                                    🔈 テスト
+                                </button>
+                            )}
+                        </span>
+                    )}
+                </div>
 
                 <div class={`display-now ${flash ? "display-flash" : ""}`}>
                     <div class="display-now-label">いま呼び出し中</div>
