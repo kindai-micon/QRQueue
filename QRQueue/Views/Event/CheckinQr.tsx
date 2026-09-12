@@ -7,7 +7,7 @@ type Model = {
     eventId: string; // eventDisplayId
 };
 
-// 受付確認QRの自動更新表示(issue #76)。
+// チェックインQRの自動更新表示(issue #76)。
 // 30秒で回転する到着確認コード付きQRを、10秒ごとに再取得して表示し続ける。
 // タブレット等を受付に設置して表示することを想定。バックグラウンドタブでは
 // タイマーが長い間隔に抑制されるため、必ず前面表示のまま運用すること。
@@ -25,7 +25,7 @@ export default function CheckinQr({ model }: { model: Model }) {
             try {
                 const res = await fetch(`/api/call/checkin-qrcode/${model.eventId}?t=${Date.now()}`);
                 if (res.status === 401 || res.status === 403) {
-                    if (!disposed) setError("受付確認QRを表示するには CallView 権限でログインしてください。");
+                    if (!disposed) setError("チェックインQRを表示するには CallView 権限でログインしてください。");
                     return;
                 }
                 if (!res.ok) {
@@ -45,7 +45,7 @@ export default function CheckinQr({ model }: { model: Model }) {
                     URL.revokeObjectURL(url);
                 }
             } catch (err) {
-                console.error("受付確認QRの更新に失敗:", err);
+                console.error("チェックインQRの更新に失敗:", err);
             }
         }
 
@@ -64,7 +64,7 @@ export default function CheckinQr({ model }: { model: Model }) {
         <Layout chrome="header">
             <div class="checkin-container">
                 <div class="checkin-card">
-                    <div class="checkin-kind">受付確認QR</div>
+                    <div class="checkin-kind">チェックインQR</div>
                     <p class="checkin-desc">
                         呼び出されたグループの<strong>代表者</strong>が、このQRを読み取って受付を確定します。
                     </p>
@@ -78,7 +78,7 @@ export default function CheckinQr({ model }: { model: Model }) {
 
                     {!error && src && (
                         <>
-                            <img src={src} alt="受付確認QR" width={360} height={360} style={{ maxWidth: "100%" }} />
+                            <img src={src} alt="チェックインQR" width={360} height={360} style={{ maxWidth: "100%" }} />
                             <p class="checkin-note">
                                 このQRは<strong>30秒ごとに更新</strong>されます(最新: {updatedAt?.toLocaleTimeString("ja-JP")})。
                                 スクリーンショットや撮影された古いQRは使用できません。

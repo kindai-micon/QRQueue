@@ -79,12 +79,12 @@ export default function Publishing({ model }: { model: Model }) {
                             target="_blank"
                             rel="noopener"
                         >
-                            参加登録QR画面を開く
+                            参加登録QR画面を開く(自動更新)
                         </a>
                     </section>
 
                     <section class="publishing-card">
-                        <h2>チェックインQR(自動更新表示)</h2>
+                        <h2>チェックインQR</h2>
                         <p class="publishing-desc">
                             受付に設置したタブレット等で表示します。呼び出されたグループの<strong>代表者</strong>が
                             読み取ると受付が確定します。
@@ -97,7 +97,7 @@ export default function Publishing({ model }: { model: Model }) {
                             class="btn-primary"
                             onClick={() => download(`/api/pdf/checkin/${model.eventId}`, "チェックインQR.pdf")}
                         >
-                            固定QRのA4掲示PDFを発行
+                            A4掲示PDFを発行
                         </button>
                         <p class="publishing-desc" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
                             ⚠ 印刷した固定QRは失効しないため、撮影・共有されたURLからでもチェックインが可能になります。
@@ -110,7 +110,7 @@ export default function Publishing({ model }: { model: Model }) {
                             target="_blank"
                             rel="noopener"
                         >
-                            受付確認QR画面を開く(自動更新)
+                            チェックインQR画面を開く(自動更新)
                         </a>
                     </section>
                 </div>
