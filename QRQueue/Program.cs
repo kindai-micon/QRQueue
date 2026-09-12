@@ -149,7 +149,7 @@ namespace QRQueue
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.ExpireTimeSpan = TimeSpan.FromDays(90);
+                options.ExpireTimeSpan = TimeSpan.FromDays(3);
                 options.SlidingExpiration = false;
                 options.Events.OnValidatePrincipal = async context =>
                 {
