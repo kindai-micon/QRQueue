@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import type { EventInfoView, QueueView } from "@/Shared/api";
-import { isSpeechSupported, speakCallAnnouncement, speakCallAgainAnnouncement, speakInterruptedAnnouncement } from "@/Shared/speech";
+import { isSpeechSupported, speakCallAnnouncement, speakCallAgainAnnouncement, speakCallWithPoolAnnouncement, speakInterruptedAnnouncement } from "@/Shared/speech";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -83,9 +83,13 @@ export default function Display({ model }: { model: Model }) {
                         setHistory((h) => [current, ...h.filter((n) => n !== current)].slice(0, 6));
                         setFlash(true);
                         setTimeout(() => setFlash(false), 1600);
-                        // 読み上げが有効な表示画面のみ音声アナウンス
+                        // 読み上げが有効な表示画面のみ音声アナウンス。
+                        // 優先プール(割り込み待ち)がいれば呼び出しにあわせて同じ読み上げに含める
                         if (ttsRef.current) {
-                            speakCallAnnouncement(current, data.callingGroup[0]?.people ?? 1);
+                            speakCallWithPoolAnnouncement(
+                                current,
+                                data.callingGroup[0]?.people ?? 1,
+                                data.interruptedGroup.map((g) => ({ number: g.number, people: g.people })));
                         }
                     }
                     lastCalling = current;

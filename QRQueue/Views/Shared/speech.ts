@@ -42,6 +42,28 @@ export function speakCallAnnouncement(number: number, people: number, repeat = 2
 }
 
 /**
+ * 呼び出しアナンスに続き、優先プール(割り込み待ち)のグループも
+ * 同じ読み上げに含める。プールが空の場合は通常の呼び出しと同じ。
+ * @param groups 現在優先プールにいるグループ(番号と人数)
+ */
+export function speakCallWithPoolAnnouncement(
+    number: number,
+    people: number,
+    groups: { number: number; people: number }[],
+    repeat = 2): void {
+    if (groups.length === 0) {
+        speakCallAnnouncement(number, people, repeat);
+        return;
+    }
+
+    const targets = groups.map((g) => `${g.number}番のお客様`).join("、");
+    speakJapanese(
+        `呼び出しいたします。${number}番のお客様、${people}名様、こちらまでお越しください。` +
+        `あわせて優先でご案内します。${targets}も、こちらまでお越しください。`,
+        repeat);
+}
+
+/**
  * 再呼び出しアナウンスを読み上げる(番号が変わらないまま再度呼ばれたとき)。
  * @param repeat 繰り返し回数(既定2回)
  */
