@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import type { EventInfoView, QueueView } from "@/Shared/api";
-import { isSpeechSupported, speakCallAnnouncement } from "@/Shared/speech";
+import { isSpeechSupported, speakCallAnnouncement, speakCallAgainAnnouncement, speakCallWithPoolAnnouncement, speakInterruptedAnnouncement } from "@/Shared/speech";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -26,6 +26,10 @@ export default function Display({ model }: { model: Model }) {
     const [ttsOn, setTtsOn] = useState(() =>
         typeof localStorage !== "undefined" && localStorage.getItem("displayTts") === "1");
     const ttsRef = useRef(ttsOn);
+    // 直近の呼び出し中グループの人数(再呼び出し読み上げ用。SignalR の Called には人数が含まれない)
+    const callingPeopleRef = useRef(1);
+    // 直近の優先プール(割り込み待ち)の番号集合。増えたグループだけを読み上げる
+    const interruptedRef = useRef<Set<number>>(new Set());
 
     function toggleTts() {
         setTtsOn((on) => {
@@ -58,6 +62,7 @@ export default function Display({ model }: { model: Model }) {
         let disposed = false;
         let poll: number | undefined;
         let lastCalling: number | null = null;
+        let firstLoad = true;
 
         async function load() {
             try {
@@ -78,13 +83,30 @@ export default function Display({ model }: { model: Model }) {
                         setHistory((h) => [current, ...h.filter((n) => n !== current)].slice(0, 6));
                         setFlash(true);
                         setTimeout(() => setFlash(false), 1600);
-                        // 読み上げが有効な表示画面のみ音声アナウンス
+                        // 読み上げが有効な表示画面のみ音声アナウンス。
+                        // 優先プール(割り込み待ち)がいれば呼び出しにあわせて同じ読み上げに含める
                         if (ttsRef.current) {
-                            speakCallAnnouncement(current, data.callingGroup[0]?.people ?? 1);
+                            speakCallWithPoolAnnouncement(
+                                current,
+                                data.callingGroup[0]?.people ?? 1,
+                                data.interruptedGroup.map((g) => ({ number: g.number, people: g.people })));
                         }
                     }
                     lastCalling = current;
                 }
+                callingPeopleRef.current = data.callingGroup[0]?.people ?? 1;
+
+                // 優先プール(割り込み待ち)の番号が増えたときだけ読み上げる
+                // (初回ロード時は前回集合が空でも読み上げない)
+                const interrupted = new Set(data.interruptedGroup.map((g) => g.number));
+                if (!firstLoad && ttsRef.current) {
+                    const added = data.interruptedGroup.filter((g) => !interruptedRef.current.has(g.number));
+                    if (added.length > 0) {
+                        speakInterruptedAnnouncement(added.map((g) => ({ number: g.number, people: g.people })));
+                    }
+                }
+                interruptedRef.current = interrupted;
+                firstLoad = false;
             } catch (err) {
                 console.error("キュー情報の取得に失敗:", err);
             }
@@ -97,7 +119,18 @@ export default function Display({ model }: { model: Model }) {
                     .withUrl("/api/queueHub", { skipNegotiation: true, transport: HttpTransportType.WebSockets })
                     .withAutomaticReconnect()
                     .build();
-                connection.on("Called", load);
+                connection.on("Called", (args?: { groupNumber?: number }) => {
+                    // 再呼び出し(番号が変わらないまま Called が再送)の検知。
+                    // サーバーは next/again の両方で Called を送るため、
+                    // - 番号が前回と同じ → 再呼び出し: ここで読み上げ(lastCalling は据え置き)
+                    // - 番号が変わった   → 新規呼び出し: load() 内の変更検知で読み上げる(二重読み上げ防止)
+                    // SignalR が使えない環境ではポーリングの番号変更検知がフォールバックになる。
+                    const n = args?.groupNumber;
+                    if (n != null && n === lastCalling && ttsRef.current) {
+                        speakCallAgainAnnouncement(n, callingPeopleRef.current);
+                    }
+                    load();
+                });
                 connection.on("QueueChanged", load);
                 connection.onreconnected(async () => {
                     await connection?.invoke("SetEvent", model.eventId);
