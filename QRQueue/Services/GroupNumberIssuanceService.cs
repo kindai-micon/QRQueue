@@ -4,14 +4,14 @@ using QRQueue.Models;
 namespace QRQueue.Services;
 
 /// <summary>
-/// 先着順呼び出し番号の採番サービス(設計書)。
+/// 先着順整理券番号の採番サービス(設計書)。
 /// Serializable 分離レベルのトランザクション内で `MAX(Number)+1` 方式を行い、
 /// 同時参加の採番競合を防ぐ。開始番号は旧踏襲で 1000 番。
 /// </summary>
 public interface IGroupNumberIssuanceService
 {
     /// <summary>
-    /// グループに呼び出し番号を採番し、保留中の変更(グループ・チケットの追加/付け替え)を
+    /// グループに整理券番号を採番し、保留中の変更(グループ・チケットの追加/付け替え)を
     /// 同じ Serializable トランザクション内で確定する。
     /// 呼び出しキューに載るタイミング(方式①参加時・方式③代表者登録時・方式②グループ成立時)で呼ぶ。
     /// </summary>
@@ -21,7 +21,7 @@ public interface IGroupNumberIssuanceService
 public class GroupNumberIssuanceService(ApplicationDbContext db) : IGroupNumberIssuanceService
 {
     /// <summary>
-    /// グループに呼び出し番号を採番する。
+    /// グループに整理券番号を採番する。
     /// 呼び出し元のトランザクションが既にある場合(イベント排他制御内、issue #82)はそれに参加し、
     /// なければ Serializable 分離レベルのトランザクションを開始して採番競合を防ぐ。
     /// </summary>

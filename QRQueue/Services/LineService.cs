@@ -209,10 +209,10 @@ namespace QRQueue.Services
                 {
                     message += $"イベント: {group.Event.Name}\n";
                 }
-                message += $"チケット番号: {ticket.Number}";
+                // Ticket.Number は旧システムの廃止予定項目で新規採番されない(常に0)ため表示しない
                 if (group != null && group.Number > 0)
                 {
-                    message += $"\n呼び出し番号: {group.Number}番";
+                    message += $"整理券番号: {group.Number}番";
                 }
                 message += "\n順番が来るとこのトークに通知が届きます。";
 

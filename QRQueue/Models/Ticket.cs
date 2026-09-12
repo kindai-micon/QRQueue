@@ -8,7 +8,7 @@ namespace QRQueue.Models
         {
             DisplayId = Guid.CreateVersion7();
         }
-        // 廃止予定: 呼び出し番号は ParticipationGroup.Number へ移行
+        // 廃止予定: 整理券番号は ParticipationGroup.Number へ移行
         public long Number { get; set; }
         // QR/URL/Push購読の鍵
         public Guid DisplayId { get; set; }

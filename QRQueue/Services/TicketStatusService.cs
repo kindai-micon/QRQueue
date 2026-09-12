@@ -75,7 +75,7 @@ namespace QRQueue.Services
             var memberCount = group?.Tickets.Count(t => t.Status != TicketStatus.Cancelled);
             var allowCoJoin = group?.AllowCoJoin;
 
-            // 拡張 : 現在の呼び出し番号と自分の順位 aheadCount(前面の Waiting グループ数)
+            // 拡張 : 現在の整理券番号と自分の順位 aheadCount(前面の Waiting グループ数)
             long? currentCallingNumber = null;
             int? aheadCount = null;
             if (group != null && ev != null && group.Number > 0
