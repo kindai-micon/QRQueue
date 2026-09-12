@@ -34,6 +34,9 @@ namespace QRQueue.Services
         /// シークレットそのものは返さず、設定済みかどうかと検証結果を返す</summary>
         Task<Dictionary<string, object?>> DiagnoseAsync();
 
+        /// <summary>公式アカウントの友だち追加URL(line.me/R/ti/p/@ID)。未設定なら null</summary>
+        string? GetAddFriendUrl();
+
         /// <summary>LINEプラットフォームのWebhookを処理する。
         /// 署名(X-Line-Signature)を検証し、unfollow(ブロック/友だち解除)で連携を自動解除する。
         /// 処理したイベント件数を返す(署名検証失敗時は-1)</summary>

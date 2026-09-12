@@ -106,6 +106,7 @@ namespace QRQueue.Controllers
             {
                 configured = lineService.IsConfigured,
                 lineLinked = lineLinked,
+                addFriendUrl = lineService.GetAddFriendUrl(),
             });
         }
 
