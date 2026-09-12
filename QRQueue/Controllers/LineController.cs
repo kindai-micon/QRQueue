@@ -35,13 +35,15 @@ namespace QRQueue.Controllers
         {
             // 失敗原因コード(reason)を電子券画面に渡す。スマホ等でデベロッパーツールを
             // 使えない環境でも、画面表示だけで原因を切り分けられるようにするため
-            var (ticketId, failureReason) = (error == null && code != null && state != null)
+            var (ticketId, failureReason, notFriend) = (error == null && code != null && state != null)
                 ? await lineService.ResolveBindingAsync(code, state)
-                : (null, error != null ? "cancelled" : "invalid_request");
+                : (null, error != null ? "cancelled" : "invalid_request", (bool?)null);
 
             if (ticketId != null)
             {
-                return Redirect($"/ticket/{ticketId}?line=linked");
+                // 友だち未追加のまま連携すると通知が届かないため、電子券ページで警告できるようにする
+                var friendParam = notFriend == true ? "&friend=0" : "";
+                return Redirect($"/ticket/{ticketId}?line=linked{friendParam}");
             }
 
             var reasonParam = Uri.EscapeDataString(failureReason ?? "unknown");
@@ -65,6 +67,18 @@ namespace QRQueue.Controllers
                 }
             }
             return Redirect("/");
+        }
+
+        // LINEプラットフォームからのWebhook(unfollow=ブロック/友だち解除を検知して自動連携解除)。
+        // ブロック済みユーザーへのpushはAPIが200を返して届かないため、ここで連携を失効させる
+        [HttpPost("webhook")]
+        public async Task<IActionResult> Webhook()
+        {
+            using var reader = new StreamReader(Request.Body);
+            var body = await reader.ReadToEndAsync();
+            var handled = await lineService.HandleWebhookAsync(body, Request.Headers["X-Line-Signature"].FirstOrDefault());
+            // 検証失敗時も200を返す(LINE側の再送無限ループを避ける。詳細はログを確認)
+            return Ok(new { handled });
         }
 
         // LINE連携の解除
