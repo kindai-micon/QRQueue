@@ -238,7 +238,7 @@ namespace QRQueue.Controllers
                 return NotFound(new ApiMessage("参加登録が見つかりません"));
             }
 
-            await IssueParticipantCookieAsync(ticket.ParticipantToken);
+            await IssueParticipantCookieAsync(ticket.ParticipantToken!.Value);
             return Redirect($"/ticket/{ticketDisplayId}");
         }
 
