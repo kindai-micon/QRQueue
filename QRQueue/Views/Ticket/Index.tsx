@@ -1,4 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
+import { isCookieStorageAvailable } from "@/Shared/cookieCheck";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage, TICKET_STATUS_LABEL, type TicketView, type VapidPublicKeyView } from "@/Shared/api";
@@ -27,6 +28,10 @@ export default function Index({ model }: { model: Model }) {
     // テスト通知の診断結果(画面に表示する。スマホは console が見れないため画面表示が基本)
     const [lineDebug, setLineDebug] = useState<{ label: string; value: string }[] | null>(null);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
+    // cookie が保存できない環境(iOS のコードスキャン等のアプリ内ビューア)検知。
+    // 保存できない場合は「Safari で開き直し+URL保存」を案内する。
+    const [cookieBlocked, setCookieBlocked] = useState(false);
+    const [ticketUrlCopied, setTicketUrlCopied] = useState(false);
     const [transferCode, setTransferCode] = useState<string | null>(null);
     const [transferring, setTransferring] = useState(false);
     const [cancelling, setCancelling] = useState(false);
@@ -95,6 +100,9 @@ export default function Index({ model }: { model: Model }) {
 
     // 「ホーム画面に追加」導線:  standalone で開いていないときだけ案内
     useEffect(() => {
+        if (!isCookieStorageAvailable()) {
+            setCookieBlocked(true);
+        }
         const standalone =
             (navigator as any).standalone === true ||
             window.matchMedia?.("(display-mode: standalone)").matches;
@@ -527,6 +535,33 @@ export default function Index({ model }: { model: Model }) {
                                 テスト通知
                             </button>
                         </div>
+                        {cookieBlocked && (
+                            <div class="home-hint" style={{ border: "1px solid #e6a23c" }}>
+                                <div>
+                                    <strong>⚠️ このブラウザでは参加情報を保存できません</strong>
+                                    <br />
+                                    iOS のカメラや「コードスキャン」から開くとこの状態になり、
+                                    順番が来てもチェックインできない可能性があります。
+                                    <strong>Safari</strong> でこのページを開き直してください。
+                                    その際は下のURLを使えば同じ電子券が開けます:
+                                    <br />
+                                    <code style={{ wordBreak: "break-all" }}>{window.location.href}</code>
+                                    <button
+                                        class="home-hint-close"
+                                        onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(window.location.href);
+                                                setTicketUrlCopied(true);
+                                            } catch {
+                                                /* クリップボード不可の環境では手動コピーしてもらう */
+                                            }
+                                        }}
+                                    >
+                                        {ticketUrlCopied ? "コピーしました" : "URLをコピー"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         {notice && (
                             <div class={`notification-notice ${noticeKind === "success" ? "notice-success" : ""}`}>{notice}</div>
                         )}

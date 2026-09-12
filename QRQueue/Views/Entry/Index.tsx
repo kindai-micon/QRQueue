@@ -2,6 +2,7 @@ import Layout from "@/Shared/Layout";
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import { readErrorMessage, type ApiMessage, type EventInfoView, type JoinConflict, type JoinResult, type RestoreResult } from "@/Shared/api";
+import { isCookieStorageAvailable } from "@/Shared/cookieCheck";
 import "/css/entry.css";
 
 type Model = {
@@ -29,9 +30,15 @@ export default function Index({ model }: { model: Model }) {
     // 会場掲示QRに埋め込まれた到着確認コード(チェックインQRと同じ仕様)。
     // window はサーバーレンダリング(SSR)時に存在しないため、クライアント側でのみ読む。
     const [receptionCode, setReceptionCode] = useState<string | null>(null);
+    // cookie が保存できない環境(iOS のコードスキャン等のアプリ内ビューア)検知。
+    // この状態で参加すると参加情報が端末に残らないため、参加前に警告する。
+    const [storageBlocked, setStorageBlocked] = useState(false);
 
     useEffect(() => {
         setReceptionCode(new URLSearchParams(window.location.search).get("rc"));
+        if (!isCookieStorageAvailable()) {
+            setStorageBlocked(true);
+        }
     }, []);
 
     useEffect(() => {
@@ -190,6 +197,16 @@ export default function Index({ model }: { model: Model }) {
         <Layout chrome="header" title={eventInfo?.eventName ? `参加登録: ${eventInfo.eventName} | QRQueue` : "参加登録 | QRQueue"}>
             <div class="entry-container">
                 <div class="entry-card">
+                    {storageBlocked && (
+                        <div class="home-hint" style={{ border: "1px solid #e6a23c", marginBottom: "1rem" }}>
+                            <div>
+                                <strong>⚠️ このブラウザでは参加情報を保存できません</strong>
+                                <br />
+                                iOS のカメラや「コードスキャン」から開くとこの状態になります。
+                                <strong>Safari</strong> で同じページを開き直してから参加登録してください。
+                            </div>
+                        </div>
+                    )}
                     <div class="entry-kind">イベント参加</div>
 
                     <h1 class="entry-event-name">
