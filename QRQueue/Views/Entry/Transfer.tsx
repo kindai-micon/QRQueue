@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import "/css/initial.css";
 
 // チケット引き継ぎ画面(issue #75)。
 // cookieを失った端末(機種変更・別ブラウザ等)で、元の端末に表示された
@@ -45,7 +46,6 @@ export default function Transfer() {
 
     return (
         <Layout chrome="header">
-            <link rel="stylesheet" href="/css/initial.css" />
             <div class="form-container">
                 <h1>チケットの引き継ぎ</h1>
                 <p>

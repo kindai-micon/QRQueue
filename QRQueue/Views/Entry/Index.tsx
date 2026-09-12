@@ -2,6 +2,7 @@ import Layout from "@/Shared/Layout";
 import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import { readErrorMessage, type ApiMessage, type EventInfoView, type JoinConflict, type JoinResult, type RestoreResult } from "@/Shared/api";
+import "/css/entry.css";
 
 type Model = {
     eventId: string;
@@ -187,7 +188,6 @@ export default function Index({ model }: { model: Model }) {
 
     return (
         <Layout chrome="header" title={eventInfo?.eventName ? `参加登録: ${eventInfo.eventName} | QRQueue` : "参加登録 | QRQueue"}>
-            <link rel="stylesheet" href="/css/entry.css" />
             <div class="entry-container">
                 <div class="entry-card">
                     <div class="entry-kind">イベント参加</div>

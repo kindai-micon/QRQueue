@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage } from "@/Shared/api";
+import "/css/initial.css";
 
 // SvelteKit routes/initial/+page.svelte から移行
 export default function Index() {
@@ -67,7 +68,6 @@ export default function Index() {
 
     return (
         <Layout chrome="header" title="初期ユーザー登録 | QRQueue">
-            <link rel="stylesheet" href="/css/initial.css" />
             <div class="form-container">
                 <h1>初期ユーザー作成</h1>
                 <p class="passcode-hint">

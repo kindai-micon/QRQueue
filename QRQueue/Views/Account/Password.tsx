@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import MessageModal from "@/Shared/Modal";
 import { readErrorMessage } from "@/Shared/api";
+import "/css/account.css";
 
 // ログイン中ユーザー自身のパスワード変更ページ
 export default function Password() {
@@ -57,7 +58,6 @@ export default function Password() {
 
     return (
         <Layout title="パスワード変更 | QRQueue">
-            <link rel="stylesheet" href="/css/account.css" />
             <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="container">
                 <div class="password-form-container">

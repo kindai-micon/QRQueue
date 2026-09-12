@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage, type EventListItem } from "@/Shared/api";
+import "/css/event.css";
 
 // SvelteKit routes/event/+page.svelte から移行
 export default function Index() {
@@ -90,7 +91,6 @@ export default function Index() {
 
     return (
         <Layout title="イベント管理 | QRQueue">
-            <link rel="stylesheet" href="/css/event.css" />
             {targetToDelete && (
                 <div class="modal-overlay">
                     <div class="modal">

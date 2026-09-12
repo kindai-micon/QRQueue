@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import Layout from "@/Shared/Layout";
+import "/css/login.css";
 
 // SvelteKit routes/login/+page.svelte から移行
 export default function Index() {
@@ -46,7 +47,6 @@ export default function Index() {
 
     return (
         <Layout chrome="header" title="ログイン | QRQueue">
-            <link rel="stylesheet" href="/css/login.css" />
             <div class="login-container">
                 <h2>ログイン</h2>
                 {errorMessage && <p class="error">{errorMessage}</p>}
