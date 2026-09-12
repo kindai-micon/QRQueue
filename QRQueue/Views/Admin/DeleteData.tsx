@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage } from "@/Shared/api";
+import "/css/admin-delete-data.css";
 
 // SvelteKit routes/admin/delete-data/+page.svelte から移行
 export default function DeleteData() {
@@ -55,7 +56,6 @@ export default function DeleteData() {
 
     return (
         <Layout title="データ削除 | QRQueue">
-            <link rel="stylesheet" href="/css/admin-delete-data.css" />
             <div class="delete-container">
                 <div class="page-title">⚠️ すべてのデータを削除</div>
 

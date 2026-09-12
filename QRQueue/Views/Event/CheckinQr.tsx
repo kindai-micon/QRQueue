@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage } from "@/Shared/queue";
+import "/css/checkin.css";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -61,7 +62,6 @@ export default function CheckinQr({ model }: { model: Model }) {
 
     return (
         <Layout chrome="header">
-            <link rel="stylesheet" href="/css/checkin.css" />
             <div class="checkin-container">
                 <div class="checkin-card">
                     <div class="checkin-kind">受付確認QR</div>

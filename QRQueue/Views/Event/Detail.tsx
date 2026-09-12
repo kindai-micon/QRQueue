@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage } from "@/Shared/api";
+import "/css/event-detail.css";
 
 type Model = {
     eventId: string;
@@ -45,7 +46,6 @@ export default function Detail({ model }: { model: Model }) {
 
     return (
         <Layout title={eventName ? `イベント: ${eventName} | QRQueue` : "イベント | QRQueue"}>
-            <link rel="stylesheet" href="/css/event-detail.css" />
             {showDeleteModal && (
                 <div class="modal-overlay">
                     <div class="modal">

@@ -3,6 +3,7 @@ import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import type { EventInfoView, QueueView } from "@/Shared/api";
 import { isSpeechSupported, speakCallAnnouncement, speakCallAgainAnnouncement, speakCallWithPoolAnnouncement, speakInterruptedAnnouncement } from "@/Shared/speech";
+import "/css/display.css";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -166,7 +167,6 @@ export default function Display({ model }: { model: Model }) {
     if (denied) {
         return (
             <Layout chrome="header" title="呼び出し表示 | QRQueue">
-                <link rel="stylesheet" href="/css/display.css" />
                 <div class="display-denied">
                     <h1>表示できません</h1>
                     <p>
@@ -180,7 +180,6 @@ export default function Display({ model }: { model: Model }) {
 
     return (
         <Layout chrome="header" title="呼び出し表示 | QRQueue">
-            <link rel="stylesheet" href="/css/display.css" />
             <div class="display-screen">
                 <div class="display-event">
                     {eventName}

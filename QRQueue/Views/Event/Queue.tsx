@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import { groupStatusLabel, type GroupView, type QueueView } from "@/Shared/api";
+import "/css/queue.css";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -79,7 +80,6 @@ export default function Queue({ model }: { model: Model }) {
 
     return (
         <Layout title="キュー一覧 | QRQueue">
-            <link rel="stylesheet" href="/css/queue.css" />
             <div class="queue-container">
                 <div class="page-title">キュー一覧</div>
 
