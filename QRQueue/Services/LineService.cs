@@ -22,6 +22,7 @@ namespace QRQueue.Services
     {
         private string? ChannelAccessToken => configuration.GetSection("Line")["ChannelAccessToken"];
         private string? ChannelSecret => configuration.GetSection("Line")["ChannelSecret"];
+        private string? OfficialAccountId => configuration.GetSection("Line")["OfficialAccountId"];
         private string? LoginClientId => configuration.GetSection("Line")["LoginClientId"];
         private string? LoginClientSecret => configuration.GetSection("Line")["LoginClientSecret"];
         private string? RedirectUri => configuration.GetSection("Line")["RedirectUri"];
@@ -282,6 +283,15 @@ namespace QRQueue.Services
             var keys = string.Join(",", jsonElement.EnumerateObject().Select(p => p.Name));
             logger.LogWarning("LINE id_token に sub が含まれませんでした。含まれるクレーム: [{Keys}]", keys);
             return null;
+        }
+
+        /// <summary>公式アカウントの友だち追加URL(line.me/R/ti/p/@ID)。未設定なら null。
+        /// 連携フローの外からでも友だち追加できるよう、電子券ページに直接リンクを出すためのもの</summary>
+        public string? GetAddFriendUrl()
+        {
+            return string.IsNullOrEmpty(OfficialAccountId)
+                ? null
+                : $"https://line.me/R/ti/p/@{OfficialAccountId}";
         }
 
         /// <summary>Messaging APIのfriendship status照会で、ユーザーが公式アカウントの友だちかを返す。
