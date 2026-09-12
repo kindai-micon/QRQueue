@@ -106,8 +106,14 @@ export default function Index({ model }: { model: Model }) {
     useEffect(() => {
         // LINE連携のコールバックで戻ってきた場合の完了表示(URLからはパラメータを消しておく)
         if (new URLSearchParams(window.location.search).get("line") === "linked") {
-            setNotice("✅ LINE連携が完了しました。順番が来るとLINEにも通知が届きます(連携先のトークに確認メッセージを送りました)");
-            setNoticeKind("success");
+            if (new URLSearchParams(window.location.search).get("friend") === "0") {
+                // 連携は完了したが公式アカウントの友だち未追加。このままだと通知が届かない
+                setNotice("⚠️ LINE連携は完了しましたが、公式アカウントが友だち追加されていません。このままだと通知が届きません。公式アカウントを友だち追加してから「テスト通知」で届くか確認してください");
+                setNoticeKind("error");
+            } else {
+                setNotice("✅ LINE連携が完了しました。順番が来るとLINEにも通知が届きます(連携先のトークに確認メッセージを送りました)");
+                setNoticeKind("success");
+            }
             window.history.replaceState(null, "", window.location.pathname);
         }
         // LINE連携が失敗した場合もログイン画面などへは飛ばされず、この画面に戻される。
@@ -379,7 +385,8 @@ export default function Index({ model }: { model: Model }) {
                 { label: "HTTP", value: String(res.status) },
                 ...(data != null ? [
                     { label: "サーバー設定", value: data.configured ? "設定済み" : "未設定(管理者対応が必要)" },
-                    { label: "LINE連携", value: data.lineLinked ? "連携済み" : "未連携" },
+                    ...(data.lineLinked != null ? [{ label: "LINE連携", value: data.lineLinked ? "連携済み" : "未連携" }] : []),
+                    ...(data.friendFlag != null ? [{ label: "友だち登録", value: data.friendFlag ? "追加済み" : "未追加(要対応)" }] : []),
                     ...(data.pushStatus != null ? [{ label: "LINE API応答", value: `HTTP ${data.pushStatus}` }] : []),
                     ...(data.reason ? [{ label: "原因", value: String(data.reason) }] : []),
                     ...(data.error ? [{ label: "LINE APIエラー詳細", value: String(data.error) }] : []),

@@ -10,8 +10,10 @@ namespace QRQueue.Services
 
         /// <summary>コールバックの code/state を検証してチケットに LineUserId を紐付け、
         /// 紐付いたチケットのDisplayIdを返す。失敗時は TicketDisplayId=null とともに
-        /// FailureReason(画面表示用の短い原因コード)を返す</summary>
-        Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state);
+        /// FailureReason(画面表示用の短い原因コード)を返す。
+        /// NotFriend は連携直後の友だち登録状態(未追加=true/追加済みまたは判定不能=null)。
+        /// 未追加のまま連携すると通知が届かないため、画面で警告を出せるようにする</summary>
+        Task<(Guid? TicketDisplayId, string? FailureReason, bool? NotFriend)> ResolveBindingAsync(string code, string state);
 
         /// <summary>state(署名付きトークン)からチケットDisplayIdだけを緩く取り出す。
         /// 連携失敗時でも電子券ページへユーザーを戻すために使う(署名・期限の検証はしない)。
@@ -31,5 +33,10 @@ namespace QRQueue.Services
         /// <summary>LINE連携の設定・資格情報を診断する(一時的な診断用エンドポイント向け)。
         /// シークレットそのものは返さず、設定済みかどうかと検証結果を返す</summary>
         Task<Dictionary<string, object?>> DiagnoseAsync();
+
+        /// <summary>LINEプラットフォームのWebhookを処理する。
+        /// 署名(X-Line-Signature)を検証し、unfollow(ブロック/友だち解除)で連携を自動解除する。
+        /// 処理したイベント件数を返す(署名検証失敗時は-1)</summary>
+        Task<int> HandleWebhookAsync(string body, string? signature);
     }
 }

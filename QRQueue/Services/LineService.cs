@@ -21,6 +21,7 @@ namespace QRQueue.Services
         ILogger<LineService> logger) : ILineService
     {
         private string? ChannelAccessToken => configuration.GetSection("Line")["ChannelAccessToken"];
+        private string? ChannelSecret => configuration.GetSection("Line")["ChannelSecret"];
         private string? LoginClientId => configuration.GetSection("Line")["LoginClientId"];
         private string? LoginClientSecret => configuration.GetSection("Line")["LoginClientSecret"];
         private string? RedirectUri => configuration.GetSection("Line")["RedirectUri"];
@@ -98,8 +99,9 @@ namespace QRQueue.Services
                 ["redirect_uri"] = RedirectUri,
                 ["state"] = BuildState(ticketDisplayId),
                 ["scope"] = "profile openid",
-                // 承認画面でMessaging APIチャネルのBot(公式アカウント)の友だち追加を促す
-                ["bot"] = "link",
+                // 承認画面の後に友だち追加の確認画面を表示する(公式仕様の bot_prompt。
+                // 旧パラメータ bot=link は無視されるため友だち追加が促されない問題があった)
+                ["bot_prompt"] = "aggressive",
             };
             return "https://access.line.me/oauth2/v2.1/authorize?" + string.Join("&",
                 query.Where(kv => !string.IsNullOrEmpty(kv.Value))
@@ -115,14 +117,14 @@ namespace QRQueue.Services
             [property: JsonPropertyName("access_token")] string? AccessToken,
             [property: JsonPropertyName("id_token")] string? IdToken);
 
-        public async Task<(Guid? TicketDisplayId, string? FailureReason)> ResolveBindingAsync(string code, string state)
+        public async Task<(Guid? TicketDisplayId, string? FailureReason, bool? NotFriend)> ResolveBindingAsync(string code, string state)
         {
             // FailureReason は電子券画面に ?line=error&reason=... で渡す短いコード。
             // スマホ等デベロッパーツールを使えない環境でも原因を画面で分かるようにするため
             if (IsConfigured == false)
             {
                 logger.LogWarning("LINE callback: LINE連携設定が未完成のため失敗(ChannelAccessToken/ClientId/ClientSecret/RedirectUri を確認)");
-                return (null, "config");
+                return (null, "config", null);
             }
             if (!TryParseState(state, out var ticketDisplayId, out var stateFailure))
             {
@@ -134,7 +136,7 @@ namespace QRQueue.Services
                     "state有効期限切れ(発行から30分超過)" => "expired",
                     _ => "state",
                 };
-                return (null, stateCode);
+                return (null, stateCode, null);
             }
 
             try
@@ -154,7 +156,7 @@ namespace QRQueue.Services
                 if (!res.IsSuccessStatusCode)
                 {
                     logger.LogWarning("LINE token交換失敗 ({Status}): {Body}", (int)res.StatusCode, body);
-                    return (null, "token");
+                    return (null, "token", null);
                 }
 
                 var token = JsonSerializer.Deserialize<TokenResponse>(body,
@@ -186,7 +188,7 @@ namespace QRQueue.Services
                 if (string.IsNullOrEmpty(lineUserId))
                 {
                     logger.LogWarning("LINE callback: id_token とプロフィールAPIのどちらからも userId を取得できませんでした({Code})", failCode);
-                    return (null, failCode ?? "idtoken");
+                    return (null, failCode ?? "idtoken", null);
                 }
 
                 var ticket = await db.Tickets
@@ -196,10 +198,14 @@ namespace QRQueue.Services
                 if (ticket == null)
                 {
                     logger.LogWarning("LINE callback: チケットが見つからない ({TicketId})", ticketDisplayId);
-                    return (null, "ticket");
+                    return (null, "ticket", null);
                 }
                 ticket.LineUserId = lineUserId;
                 await db.SaveChangesAsync();
+
+                // 連携直後に友だち登録状態を照会する。未追加のまま連携が完了すると
+                // 通知が届かないため、電子券ページで警告できるよう結果を返す
+                var notFriend = await CheckFriendFlagAsync(lineUserId) == false;
 
                 // 連携したチケットが分かるよう、イベント名と番号を確認メッセージに載せる。
                 // 複数のチケットで連携したときに「どのチケットの通知だったか」を区別できるようにするため
@@ -217,12 +223,12 @@ namespace QRQueue.Services
                 message += "\n順番が来るとこのトークに通知が届きます。";
 
                 await SendNotifyAsync([ticketDisplayId], message);
-                return (ticketDisplayId, null);
+                return (ticketDisplayId, null, notFriend);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "LINE連携処理でエラー");
-                return (null, "exception");
+                return (null, "exception", null);
             }
         }
 
@@ -276,6 +282,37 @@ namespace QRQueue.Services
             var keys = string.Join(",", jsonElement.EnumerateObject().Select(p => p.Name));
             logger.LogWarning("LINE id_token に sub が含まれませんでした。含まれるクレーム: [{Keys}]", keys);
             return null;
+        }
+
+        /// <summary>Messaging APIのfriendship status照会で、ユーザーが公式アカウントの友だちかを返す。
+        /// 照会自体が失敗した場合は判定不能として null を返す</summary>
+        private async Task<bool?> CheckFriendFlagAsync(string lineUserId)
+        {
+            if (ChannelAccessToken == null)
+            {
+                return null;
+            }
+            try
+            {
+                var client = httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
+                using var request = new HttpRequestMessage(HttpMethod.Get,
+                    $"https://api.line.me/v2/bot/friendship/status?userId={Uri.EscapeDataString(lineUserId)}");
+                request.Headers.Authorization = new("Bearer", ChannelAccessToken);
+                var res = await client.SendAsync(request);
+                if (!res.IsSuccessStatusCode)
+                {
+                    logger.LogWarning("LINE friendship status照会が失敗 ({Status})", (int)res.StatusCode);
+                    return null;
+                }
+                var json = JsonSerializer.Deserialize<JsonElement>(await res.Content.ReadAsStringAsync());
+                return json.TryGetProperty("friendFlag", out var flag) && flag.ValueKind == JsonValueKind.True;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "LINE friendship status照会でエラー");
+                return null;
+            }
         }
 
         /// <summary>アクセストークンを使い LINE Login ソーシャルAPI(GET /v2/profile)から userId を取得する。
@@ -434,6 +471,68 @@ namespace QRQueue.Services
                 result["error"] = $"{ex.GetType().Name}: {ex.Message}";
             }
             return result;
+        }
+
+        /// <summary>LINEプラットフォームのWebhook署名(X-Line-Signature)を検証する。
+        /// Messaging APIチャネルのChannelSecretでのHMAC-SHA256(base64)。未設定なら検証不可=失敗扱い(fail-closed)</summary>
+        private bool VerifyWebhookSignature(string body, string? signature)
+        {
+            if (string.IsNullOrEmpty(ChannelSecret) || string.IsNullOrEmpty(signature))
+            {
+                return false;
+            }
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(ChannelSecret));
+            var expected = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(body)));
+            return CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(expected),
+                Encoding.UTF8.GetBytes(signature));
+        }
+
+        /// <summary>Webhookイベントを処理する。unfollow(ブロック/友だち解除)が来たら
+        /// 該当ユーザーの連携を自動解除する(ブロック済みへのpushは200で黙って届かなくなるため)。
+        /// 戻り値は処理したイベント件数(署名検証失敗時は -1)</summary>
+        public async Task<int> HandleWebhookAsync(string body, string? signature)
+        {
+            if (!VerifyWebhookSignature(body, signature))
+            {
+                logger.LogWarning("LINE webhook: 署名検証に失敗しました(ChannelSecret未設定または不一致)");
+                return -1;
+            }
+            try
+            {
+                var json = JsonSerializer.Deserialize<JsonElement>(body);
+                if (!json.TryGetProperty("events", out var events) || events.ValueKind != JsonValueKind.Array)
+                {
+                    return 0;
+                }
+                var handled = 0;
+                foreach (var ev in events.EnumerateArray())
+                {
+                    var type = ev.TryGetProperty("type", out var t) ? t.GetString() : null;
+                    var userId = ev.TryGetProperty("source", out var src) && src.TryGetProperty("userId", out var uid)
+                        ? uid.GetString()
+                        : null;
+                    if (type == "unfollow" && !string.IsNullOrEmpty(userId))
+                    {
+                        // ブロック・友だち解除されたので連携を失効させる(再度届くことはない)
+                        var count = await db.Tickets
+                            .Where(t => t.LineUserId == userId)
+                            .ExecuteUpdateAsync(s => s.SetProperty(t => t.LineUserId, (string?)null));
+                        handled += count;
+                        logger.LogInformation("LINE webhook: unfollow を検知し {Count} 件の連携を解除しました", count);
+                    }
+                    else
+                    {
+                        handled++;
+                    }
+                }
+                return handled;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "LINE webhookの処理でエラー");
+                return 0;
+            }
         }
 
         // ===== 診断(一時的な診断用エンドポイント向け。シークレットは返さない) =====
