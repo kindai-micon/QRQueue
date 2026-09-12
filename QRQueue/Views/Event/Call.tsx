@@ -292,7 +292,7 @@ export default function Call({ model }: { model: Model }) {
                             ))
                         )}
                         <p class="call-hint">
-                            未到着グループが一定時間(既定5分)を超えると優先待機へ移動します(QueueCall:SlotTimeoutMinutes で変更可)。
+                            到着していないグループはスタッフが「優先待機へ」ボタンで割り込みプールに移動してください。
                         </p>
                     </section>
                     <section class="call-panel">
