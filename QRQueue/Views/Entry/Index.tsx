@@ -285,6 +285,7 @@ export default function Index({ model }: { model: Model }) {
                                     <span class="entry-mode-desc">すぐに呼び出し番号が発行されます</span>
                                 </button>
 
+                                {eventInfo?.autoGroupEnabled && (
                                 <button
                                     class="entry-mode"
                                     disabled={!eventInfo?.isOpen || busy}
@@ -293,6 +294,7 @@ export default function Index({ model }: { model: Model }) {
                                     <span class="entry-mode-name">{busyMode === "pool" ? "登録中..." : "おまかせグループ"}</span>
                                     <span class="entry-mode-desc">仲間と自動でグループになり、成立次第番号が確定します</span>
                                 </button>
+                                )}
 
                                 <button
                                     class="entry-mode"

@@ -142,6 +142,26 @@ namespace QRQueue.Controllers
             return Ok(new { autoNextEnabled = ev.AutoNextEnabled });
         }
 
+        /// <summary>方式②(お任せグループ)参加の受付可否のオン/オフ切替。オフにすると参加登録画面から「おまかせグループ」が選べなくなる</summary>
+        public record AutoGroupRequest(bool Enabled);
+
+        [Authorize(Policy = "CallExecute")]
+        [HttpPut("autogroup/{eventDisplayId}")]
+        public async Task<IActionResult> SetAutoGroup(Guid eventDisplayId, [FromBody] AutoGroupRequest request)
+        {
+            var ev = await _db.Events.FirstOrDefaultAsync(x => x.DisplayId == eventDisplayId);
+            if (ev == null)
+            {
+                return NotFound();
+            }
+
+            ev.AutoGroupEnabled = request.Enabled;
+            await _db.SaveChangesAsync();
+            // 参加登録画面・呼び出しコンソールへ即時反映
+            await NotifyStatusChangedAsync(eventDisplayId);
+            return Ok(new { autoGroupEnabled = ev.AutoGroupEnabled });
+        }
+
         [Authorize(Policy = "CallExecute")]
         [HttpPut("next/{eventDisplayId}")]
         public async Task<IActionResult> Next(Guid eventDisplayId)

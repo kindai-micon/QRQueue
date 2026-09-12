@@ -58,7 +58,8 @@ namespace QRQueue.Controllers
                 ev.Status,
                 ev.Status == EventStatus.Open,
                 3,
-                ev.AutoNextEnabled);
+                ev.AutoNextEnabled,
+                ev.AutoGroupEnabled);
         }
 
         /// <summary>
@@ -144,6 +145,10 @@ namespace QRQueue.Controllers
                 }
                 case "pool":
                 {
+                    if (!ev.AutoGroupEnabled)
+                    {
+                        return Conflict(new ApiMessage("お任せグループ参加は現在受け付けていません"));
+                    }
                     var group = new ParticipationGroup
                     {
                         EventId = ev.Id,
