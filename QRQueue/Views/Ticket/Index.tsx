@@ -23,6 +23,10 @@ export default function Index({ model }: { model: Model }) {
     const [lineLinked, setLineLinked] = useState(false);
     // LINE通知のデバッグ用: サーバー側のLINE設定が有効か(未設定なら連携ボタンを出さず無効旨を表示)
     const [lineConfigured, setLineConfigured] = useState<boolean | null>(null);
+    // 公式アカウントの友だち追加URL(未設定なら出さない)。未連携時・未追加検知時に表示する
+    const [addFriendUrl, setAddFriendUrl] = useState<string | null>(null);
+    // テスト通知で判明した友だち登録状態(null=未確認)
+    const [friendFlag, setFriendFlag] = useState<boolean | null>(null);
     const [lineTestSending, setLineTestSending] = useState(false);
     // テスト通知の診断結果(画面に表示する。スマホは console が見れないため画面表示が基本)
     const [lineDebug, setLineDebug] = useState<{ label: string; value: string }[] | null>(null);
@@ -361,10 +365,13 @@ export default function Index({ model }: { model: Model }) {
                 console.error("LINE連携状態の取得に失敗:", res.status, await readErrorMessage(res));
                 return;
             }
-            const data: { configured: boolean; lineLinked: boolean } = await res.json();
+            const data: { configured: boolean; lineLinked: boolean; addFriendUrl?: string | null } = await res.json();
             setLineConfigured(data.configured);
             if (data.lineLinked) {
                 setLineLinked(true);
+            }
+            if (data.addFriendUrl) {
+                setAddFriendUrl(data.addFriendUrl);
             }
         } catch (error) {
             console.error("LINE連携状態の取得に失敗:", error);
@@ -380,6 +387,7 @@ export default function Index({ model }: { model: Model }) {
         try {
             const res = await fetch(`/api/line/test/${model.ticketId}`, { method: "POST" });
             const data = await res.json().catch(() => null);
+            setFriendFlag(typeof data?.friendFlag === "boolean" ? data.friendFlag : null);
             const debugRows = [
                 { label: "日時", value: new Date().toLocaleString() },
                 { label: "HTTP", value: String(res.status) },
@@ -539,6 +547,12 @@ export default function Index({ model }: { model: Model }) {
                         )}
 
                         <div class="line-actions">
+                            {/* 友だち追加URL: 未連携時、またはテスト通知で未追加が判明したときに表示する */}
+                            {addFriendUrl && (!lineLinked || friendFlag === false) && (
+                                <a class="line-btn" href={addFriendUrl} target="_blank" rel="noopener">
+                                    LINE公式アカウントを友だち追加する
+                                </a>
+                            )}
                             {lineLinked ? (
                                 <>
                                     <div class="line-linked-label">LINE通知 連携済み</div>
