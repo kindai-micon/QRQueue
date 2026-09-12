@@ -221,6 +221,26 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
+        /// cookie保存可否のプローブ(一時的)。トップレベルGETで直接開くとテスト用cookie
+        /// (cqprobe・JS読み取り可・1日)を発行する。session-check の hasProbeCookie と
+        /// 組み合わせて「Safariがcookie自体を保存しない」のか「fetchレスポンスの
+        /// Set-Cookie だけ捨てられている」のかを切り分ける。
+        /// </summary>
+        [HttpGet("cookie-probe")]
+        public IActionResult CookieProbe()
+        {
+            Response.Cookies.Append("cqprobe", "1", new CookieOptions
+            {
+                HttpOnly = false,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                IsEssential = true,
+                MaxAge = TimeSpan.FromDays(1),
+            });
+            return Ok(new { probeSet = true, serverTimeUtc = DateTimeOffset.UtcNow });
+        }
+
+        /// <summary>
         /// 参加者cookieの診断(一時的)。ブラウザがcookieを保存したか(=リクエストヘッダに
         /// participant が付いているか)と、サーバー側検証(AuthenticateAsync=署名+DB照合)を
         /// 通ったかを分けて返す。即時再読み込みで「cookieがありません」になる事象の切り分け用。
@@ -229,6 +249,7 @@ namespace QRQueue.Controllers
         public async Task<IActionResult> SessionCheck()
         {
             var hasCookieHeader = Request.Cookies.ContainsKey("participant");
+            var hasProbeCookie = Request.Cookies.ContainsKey("cqprobe");
             var auth = await HttpContext.AuthenticateAsync("Participant");
             var token = auth.Succeeded ? auth.Principal?.FindFirstValue("participantToken") : null;
             bool? ticketActive = null;
@@ -240,6 +261,7 @@ namespace QRQueue.Controllers
             return Ok(new
             {
                 hasParticipantCookieHeader = hasCookieHeader,
+                hasProbeCookie,
                 signatureValid = auth.Succeeded,
                 ticketActive,
                 serverTimeUtc = DateTimeOffset.UtcNow,
