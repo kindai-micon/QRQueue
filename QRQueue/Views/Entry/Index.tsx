@@ -146,7 +146,9 @@ export default function Index({ model }: { model: Model }) {
                 return;
             }
 
-            window.location.href = `/ticket/${data.ticketDisplayId}`;
+            // Safari 等で fetch レスポンスの Set-Cookie が保存されないケースに備え、
+            // トップレベル遷移(302)で cookie を確定させてから電子券へ遷移する
+            window.location.href = `/api/entry/issue-cookie?ticketDisplayId=${data.ticketDisplayId}`;
         } catch (err) {
             console.error("参加登録に失敗:", err);
             setError("通信エラーが発生しました");
@@ -181,7 +183,9 @@ export default function Index({ model }: { model: Model }) {
 
             // 受付確定(メンバー追加・人数・同時参加可否の変更)は電子券画面で行う(issue #66)。
             // group-create の場合も代表者はまず電子券画面へ遷移する。
-            window.location.href = `/ticket/${data.ticketDisplayId}`;
+            // Safari 等で fetch レスポンスの Set-Cookie が保存されないケースに備え、
+            // トップレベル遷移(302)で cookie を確定させてから電子券へ遷移する
+            window.location.href = `/api/entry/issue-cookie?ticketDisplayId=${data.ticketDisplayId}`;
         } catch (err) {
             console.error("参加登録(上書き)に失敗:", err);
             setError("通信エラーが発生しました");

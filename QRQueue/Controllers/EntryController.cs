@@ -221,6 +221,28 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
+        /// 参加完了後のcookie確定用リダイレクト(一時的)。fetch レスポンスの Set-Cookie を
+        /// 保存しない環境(Safari の一部挙動・アプリ内ビューア等)でも、トップレベル遷移の
+        /// レスポンスで cookie を確実に発行するために使う。電子券URL(表示ID)はそれ自体が
+        /// 秘密トークンを兼ねるため、これを知っている端末への cookie 発行は URL 所有と同水準。
+        /// </summary>
+        [HttpGet("issue-cookie")]
+        public async Task<IActionResult> IssueCookie([FromQuery] Guid ticketDisplayId)
+        {
+            var ticket = await applicationDbContext.Tickets
+                .Include(x => x.ParticipationGroup)
+                .FirstOrDefaultAsync(x => x.DisplayId == ticketDisplayId
+                    && x.Status == TicketStatus.Registered);
+            if (ticket == null)
+            {
+                return NotFound(new ApiMessage("参加登録が見つかりません"));
+            }
+
+            await IssueParticipantCookieAsync(ticket.ParticipantToken);
+            return Redirect($"/ticket/{ticketDisplayId}");
+        }
+
+        /// <summary>
         /// cookie保存可否のプローブ(一時的)。トップレベルGETで直接開くとテスト用cookie
         /// (cqprobe・JS読み取り可・1日)を発行する。session-check の hasProbeCookie と
         /// 組み合わせて「Safariがcookie自体を保存しない」のか「fetchレスポンスの
