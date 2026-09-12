@@ -3,7 +3,7 @@ using QRQueue.Models;
 namespace QRQueue.Models.API
 {
     /// <summary>GET /api/entry/{eventDisplayId} のレスポンス(イベント情報)</summary>
-    public record EventInfoView(string EventName, EventStatus Status, bool IsOpen, int MaxGroupSize, bool AutoNextEnabled);
+    public record EventInfoView(string EventName, EventStatus Status, bool IsOpen, int MaxGroupSize, bool AutoNextEnabled, bool AutoGroupEnabled);
 
     /// <summary>参加登録(POST /api/entry/join・/api/entry/group/join)のレスポンス。
     /// joinToken は方式③グループ作成時のみ、groupNumber は方式②プール未成立時 null。</summary>
