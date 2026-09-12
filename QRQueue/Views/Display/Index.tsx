@@ -188,7 +188,7 @@ export default function Display({ model }: { model: Model }) {
                             <button
                                 class={`display-tts-toggle ${ttsOn ? "display-tts-on" : ""}`}
                                 onClick={toggleTts}
-                                title="この画面で呼び出し番号を音声読み上げします(ONにした画面だけ鳴ります)"
+                                title="この画面で整理券番号を音声読み上げします(ONにした画面だけ鳴ります)"
                             >
                                 {ttsOn ? "🔊 読み上げ ON" : "🔇 読み上げ OFF"}
                             </button>

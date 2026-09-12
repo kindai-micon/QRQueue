@@ -195,10 +195,10 @@ namespace QRQueue.Controllers
                 return NotFound("イベントが見つかりません");
             }
 
-            // 5) 重複検証(チケット番号・QR ID)
+            // 5) 重複検証(整理券番号・QR ID)
             if (tickets.Select(t => t.number).Distinct().Count() != tickets.Length)
             {
-                return BadRequest("チケット番号が重複しています");
+                return BadRequest("整理券番号が重複しています");
             }
             var requestedIds = tickets.Select(t => t.displayId).ToList();
             var hasExistingId = await applicationDbContext.Tickets
