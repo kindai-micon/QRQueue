@@ -264,7 +264,7 @@ public enum TicketStatus   // 置換
 |---|---|
 | cookie 名 | `participant` |
 | 値 | 署名・暗号化された認証チケット。claim `participantToken`(= DB の `Ticket.ParticipantToken` と同じUUID)を含む |
-| 属性 | `HttpOnly; Secure; SameSite=Lax; Path=/`(永続 cookie、有効期限90日) |
+| 属性 | `HttpOnly; Secure; SameSite=Lax; Path=/`(永続 cookie、有効期限3日) |
 | 発行 | 初回の `POST /api/entry/join` 成功時(参加登録QRを初めて読んだ端末で確定) |
 | 更新 | 上書き再参加・グループ参加でも**端末単位で不変**。発行は1回きり |
 
@@ -278,7 +278,7 @@ builder.Services.AddAuthentication()
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.ExpireTimeSpan = TimeSpan.FromDays(90);
+        options.ExpireTimeSpan = TimeSpan.FromDays(3);
         options.SlidingExpiration = false;
         // participantToken claim ⇔ DB 照合(失効済みトークンなら拒否)
         options.Events.OnValidatePrincipal = async context =>
