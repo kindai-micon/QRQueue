@@ -279,9 +279,9 @@ namespace QRQueue.Controllers
         }
 
         /// <summary>
-        /// 優先待機(Interrupted/割り込みプール)のグループを直接呼び出す。
-        /// 代表者のチェックインを待たずに、スタッフの判断で優先プールのグループを呼び出したい場合に使用する。
-        /// 状態を Calling へ移し、SignalR/Web Push/LINE の告知も行う(QueueCallService.CallInterruptedGroupAsync)。
+        /// 優先待機(Interrupted/割り込みプール)のグループへ通知を(再)送信する。
+        /// 代表者のチェックインを促すためのもので、状態は Interrupted のまま変更しない
+        /// (グループは割り込みプールに残留する)。SignalR/Web Push/LINE の告知のみ行う。
         /// </summary>
         [Authorize(Policy = "CallExecute")]
         [HttpPut("group/{groupDisplayId}/call")]
@@ -295,12 +295,12 @@ namespace QRQueue.Controllers
                 return NotFound();
             }
 
-            var called = await _queueCallService.CallInterruptedGroupAsync(group.Event, groupDisplayId);
-            if (called == null)
+            var notified = await _queueCallService.CallInterruptedGroupAsync(group.Event, groupDisplayId);
+            if (notified == null)
             {
-                return Conflict("優先待機(割り込みプール)のグループのみ直接呼び出せます");
+                return Conflict("優先待機(割り込みプール)のグループのみ通知を送れます");
             }
-            return Ok(new { groupNumber = group.Number, status = GroupStatus.Calling.ToString() });
+            return Ok(new { groupNumber = group.Number, status = GroupStatus.Interrupted.ToString() });
         }
 
         [Authorize(Policy = "CallView")]
