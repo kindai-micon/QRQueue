@@ -212,6 +212,24 @@ export default function Call({ model }: { model: Model }) {
                     >
                         自動呼出し: {ev?.autoNextEnabled ? "ON" : "OFF"}
                     </button>
+                    <button
+                        class={`${ev?.autoGroupEnabled ? "btn-primary" : "btn-secondary"} btn-sm`}
+                        disabled={busy}
+                        onClick={() => {
+                            const next = !(ev?.autoGroupEnabled ?? true);
+                            action(
+                                next ? "autogroup-on" : "autogroup-off",
+                                () => fetch(`/api/call/autogroup/${model.eventId}`, {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ enabled: next }),
+                                }),
+                                next ? "お任せ参加をオンにしました" : "お任せ参加をオフにしました",
+                            );
+                        }}
+                    >
+                        お任せ参加: {ev?.autoGroupEnabled ? "ON" : "OFF"}
+                    </button>
                 </div>
 
                 <div class="call-actions">

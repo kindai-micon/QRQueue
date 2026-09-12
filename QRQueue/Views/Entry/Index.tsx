@@ -23,7 +23,7 @@ export default function Index({ model }: { model: Model }) {
     const [selectedMode, setSelectedMode] = useState<string>("");                   //最初に押した参加方法（solo など）.
     const [joinToken, setJoinToken] = useState<string | null>(null);                //グループ参加用の番号.
     const [groupNumber, setGroupNumber] = useState<number | null>(null);            //作成されたグループ番号.
-    const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    //作成された自分のチケット番号.
+    const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);    //作成された自分の整理券番号.
     const [error, setError] = useState<string | null>(null);                        //画面内に表示するエラー文言.
     const [busyMode, setBusyMode] = useState<string | null>(null);                  //処理中の参加方法（ボタンの二重押下防止）.
     // 会場掲示QRに埋め込まれた到着確認コード(チェックインQRと同じ仕様)。
@@ -282,9 +282,10 @@ export default function Index({ model }: { model: Model }) {
                                     onClick={() => handleJoin("solo")}
                                 >
                                     <span class="entry-mode-name">{busyMode === "solo" ? "登録中..." : "1人で参加"}</span>
-                                    <span class="entry-mode-desc">すぐに呼び出し番号が発行されます</span>
+                                    <span class="entry-mode-desc">すぐに整理券番号が発行されます</span>
                                 </button>
 
+                                {eventInfo?.autoGroupEnabled && (
                                 <button
                                     class="entry-mode"
                                     disabled={!eventInfo?.isOpen || busy}
@@ -293,6 +294,7 @@ export default function Index({ model }: { model: Model }) {
                                     <span class="entry-mode-name">{busyMode === "pool" ? "登録中..." : "おまかせグループ"}</span>
                                     <span class="entry-mode-desc">仲間と自動でグループになり、成立次第番号が確定します</span>
                                 </button>
+                                )}
 
                                 <button
                                     class="entry-mode"

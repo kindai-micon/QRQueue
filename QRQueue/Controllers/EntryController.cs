@@ -45,7 +45,7 @@ namespace QRQueue.Controllers
         public record TransferCompleteRequest(string Code);
 
         /// <summary>参加登録画面の初期化(イベント名・受付状態・グループ上限)</summary>
-        [HttpGet("{eventDisplayId}")]
+        [HttpGet("{eventDisplayId:guid}")]
         public async Task<ActionResult<EventInfoView>> GetEventInfo(Guid eventDisplayId)
         {
             var ev = await eventRepository.FindByDisplayIdAsync(eventDisplayId);
@@ -58,7 +58,8 @@ namespace QRQueue.Controllers
                 ev.Status,
                 ev.Status == EventStatus.Open,
                 3,
-                ev.AutoNextEnabled);
+                ev.AutoNextEnabled,
+                ev.AutoGroupEnabled);
         }
 
         /// <summary>
@@ -144,6 +145,10 @@ namespace QRQueue.Controllers
                 }
                 case "pool":
                 {
+                    if (!ev.AutoGroupEnabled)
+                    {
+                        return Conflict(new ApiMessage("お任せグループ参加は現在受け付けていません"));
+                    }
                     var group = new ParticipationGroup
                     {
                         EventId = ev.Id,
@@ -213,6 +218,32 @@ namespace QRQueue.Controllers
                 await IssueParticipantCookieAsync(participantToken);
             }
             return Ok(result);
+        }
+
+        /// <summary>
+        /// 参加者cookieの診断(一時的)。ブラウザがcookieを保存したか(=リクエストヘッダに
+        /// participant が付いているか)と、サーバー側検証(AuthenticateAsync=署名+DB照合)を
+        /// 通ったかを分けて返す。即時再読み込みで「cookieがありません」になる事象の切り分け用。
+        /// </summary>
+        [HttpGet("session-check")]
+        public async Task<IActionResult> SessionCheck()
+        {
+            var hasCookieHeader = Request.Cookies.ContainsKey("participant");
+            var auth = await HttpContext.AuthenticateAsync("Participant");
+            var token = auth.Succeeded ? auth.Principal?.FindFirstValue("participantToken") : null;
+            bool? ticketActive = null;
+            if (Guid.TryParse(token, out var t))
+            {
+                ticketActive = await applicationDbContext.Tickets.AnyAsync(
+                    x => x.ParticipantToken == t && x.Status == TicketStatus.Registered);
+            }
+            return Ok(new
+            {
+                hasParticipantCookieHeader = hasCookieHeader,
+                signatureValid = auth.Succeeded,
+                ticketActive,
+                serverTimeUtc = DateTimeOffset.UtcNow,
+            });
         }
 
         /// <summary>同一端末から電子券を復元(参加者cookie → URL喪失対策)</summary>
@@ -298,7 +329,7 @@ namespace QRQueue.Controllers
                     return Conflict(new ApiMessage("まだ呼び出されていません"));
                 case GroupStatus.Completed:
                     // 既にチェックイン済み(冪等)。cookie はここで削除する
-                    await HttpContext.SignOutAsync("Participant");
+                    await SignOutIfNoOtherActiveEventAsync(participantToken.Value, ev.Id);
                     return new CheckinResult(group.Number, group.Status);
             }
 
@@ -317,9 +348,31 @@ namespace QRQueue.Controllers
             // 受付場所に待機列ができてしまう。次の呼び出しはスタッフが呼び出しコンソールの
             // 「次を呼ぶ」(PUT /api/call/next/{eventDisplayId})から実行する。
             // チェックイン成功時は参加者cookieを削除する(チケットは使用済み確定済み。
-            // 同じ端末からは新規参加として再登録できる)
-            await HttpContext.SignOutAsync("Participant");
+            // 同じ端末からは新規参加として再登録できる)。
+            // ただし同じ端末が別イベントで呼び出し待ち等の有効参加を持つ場合は cookie を保持し、
+            // そのイベントの券復元を壊さない(マルチイベント対応)。
+            await SignOutIfNoOtherActiveEventAsync(participantToken.Value, ev.Id);
             return new CheckinResult(group.Number, group.Status);
+        }
+
+        /// <summary>
+        /// チェックイン完了後の参加者cookie削除。他イベントに「受付待ちになりうる」
+        /// 有効参加(Waiting/Matching/Calling/Interrupted のグループ所属)が残っている場合は
+        /// cookie を保持する(削除すると別イベントの券復元が不可能になるため)。
+        /// </summary>
+        private async Task SignOutIfNoOtherActiveEventAsync(Guid participantToken, Guid completedEventId)
+        {
+            var hasOtherActive = await applicationDbContext.Tickets.AnyAsync(x =>
+                x.ParticipantToken == participantToken
+                && x.Status == TicketStatus.Registered
+                && x.ParticipationGroupId != null
+                && x.ParticipationGroup!.EventId != completedEventId
+                && x.ParticipationGroup!.Status != GroupStatus.Completed
+                && x.ParticipationGroup!.Status != GroupStatus.Cancelled);
+            if (!hasOtherActive)
+            {
+                await HttpContext.SignOutAsync("Participant");
+            }
         }
 
         /// <summary>メンバー参加確認画面用: グループ番号・現在人数・満員・参加可否</summary>
@@ -481,7 +534,7 @@ namespace QRQueue.Controllers
 
         /// <summary>
         /// 受付確定(「受付」ボタン、issue #66)。代表者が押した時点で受付を確定し、
-        /// 呼び出し番号を採番して待機キューへ追加する。
+        /// 整理券番号を採番して待機キューへ追加する。
         /// 確定後は人数・同時参加可否を変更できない(JoinToken を無効化)。
         /// 状態遷移(Waiting 化・JoinToken 無効化)を採番前に済ませ、
         /// IssueNumberAsync と同一トランザクションで原子的に確定する(レビュー指摘)。

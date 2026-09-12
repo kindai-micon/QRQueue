@@ -8,7 +8,7 @@ namespace QRQueue.Models
     public class ParticipationGroup : BaseModel
     {
         public Guid DisplayId { get; set; } = Guid.CreateVersion7();
-        // 呼び出し番号(キュー載せ時に採番、未採番=0)
+        // 整理券番号(キュー載せ時に採番、未採番=0)
         public long Number { get; set; }
         [ForeignKey(nameof(Event))]
         public Guid EventId { get; set; }

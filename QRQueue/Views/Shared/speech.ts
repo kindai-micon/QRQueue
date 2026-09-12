@@ -31,7 +31,7 @@ function speakJapanese(text: string, repeat: number): void {
 
 /**
  * 呼び出しアナウンスを読み上げる。
- * @param number 呼び出し番号(例: 1003)
+ * @param number 整理券番号(例: 1003)
  * @param people グループ人数
  * @param repeat 繰り返し回数(既定2回)
  */

@@ -187,7 +187,7 @@ export default function Index({ model }: { model: Model }) {
         }
     }
 
-    // 受付確定: 代表者が「受付」を押すと呼び出し番号が採番され、待機キューに追加される
+    // 受付確定: 代表者が「受付」を押すと整理券番号が採番され、待機キューに追加される
     async function confirmGroup() {
         if (!ticketData?.eventId) return;
         if (!confirm("受付を確定しますか?\n確定後は人数と同時参加可否を変更できません。")) return;
@@ -578,7 +578,7 @@ export default function Index({ model }: { model: Model }) {
                         </div>
 
                         <div class="ticket-number-box">
-                            <div class="ticket-number-label">呼び出し番号</div>
+                            <div class="ticket-number-label">整理券番号</div>
                             <div class="ticket-number">{displayNumber}</div>
                             {ticketData.status === "Matching" && (
                                 <div class="ticket-number-sub">グループが揃い次第、番号が確定します</div>
