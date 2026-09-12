@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage, TICKET_STATUS_LABEL, type TicketView, type VapidPublicKeyView } from "@/Shared/api";
+import "/css/ticket.css";
 
 type Model = {
     ticketId: string;
@@ -512,7 +513,6 @@ export default function Index({ model }: { model: Model }) {
 
     return (
         <Layout chrome="header" title={ticketData?.eventName ? `${ticketData.eventName} 電子券 | QRQueue` : "電子券 | QRQueue"}>
-            <link rel="stylesheet" href="/css/ticket.css" />
             {loaded ? (
                 ticketData ? (
                     <div class="container">

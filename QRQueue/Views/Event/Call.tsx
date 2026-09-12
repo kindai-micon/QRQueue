@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import type { HubConnection } from "@microsoft/signalr";
 import Layout from "@/Shared/Layout";
 import { groupStatusLabel, readErrorMessage, type EventInfoView, type GroupView, type QueueView } from "@/Shared/api";
+import "/css/call.css";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -166,7 +167,6 @@ export default function Call({ model }: { model: Model }) {
 
     return (
         <Layout title="呼び出しコンソール | QRQueue">
-            <link rel="stylesheet" href="/css/call.css" />
             <div class="call-container">
                 <div class="page-title">呼び出しコンソール: {ev?.eventName ?? "..."}</div>
 

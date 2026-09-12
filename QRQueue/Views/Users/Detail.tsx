@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import MessageModal from "@/Shared/Modal";
 import { readErrorMessage, type SendRole, type SendUser } from "@/Shared/api";
+import "/css/users-detail.css";
 
 type Model = {
     username: string;
@@ -142,7 +143,6 @@ export default function Detail({ model }: { model: Model }) {
 
     return (
         <Layout title="ユーザー詳細 | QRQueue">
-            <link rel="stylesheet" href="/css/users-detail.css" />
             <MessageModal message={notice} onClose={() => setNotice(null)} />
             {showModal && roleToRemove && (
                 <div class="modal-overlay">

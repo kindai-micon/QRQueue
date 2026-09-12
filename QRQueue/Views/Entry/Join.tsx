@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import { readErrorMessage, type GroupInfoView, type JoinResult } from "@/Shared/api";
+import "/css/join.css";
 
 type Model = {
     joinToken: string;
@@ -62,7 +63,6 @@ export default function Join({ model }: { model: Model }) {
 
     return (
         <Layout chrome="header" title="グループ参加 | QRQueue">
-            <link rel="stylesheet" href="/css/join.css" />
             <div class="join-container">
                 {!loaded && <p class="join-loading">グループ情報を読み込み中...</p>}
 

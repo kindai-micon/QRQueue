@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import MessageModal from "@/Shared/Modal";
 import type { SendRole } from "@/Shared/api";
+import "/css/roles.css";
 
 // SvelteKit routes/roles/+page.svelte から移行
 export default function Index() {
@@ -75,7 +76,6 @@ export default function Index() {
 
     return (
         <Layout title="ロール管理 | QRQueue">
-            <link rel="stylesheet" href="/css/roles.css" />
             <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="roles-container">
                 <h2>ロール管理</h2>

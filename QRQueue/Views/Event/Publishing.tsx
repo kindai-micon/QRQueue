@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import Layout from "@/Shared/Layout";
 import MessageModal from "@/Shared/Modal";
 import type { EventInfoView } from "@/Shared/api";
+import "/css/event-publishing.css";
 
 type Model = {
     eventId: string; // eventDisplayId
@@ -48,7 +49,6 @@ export default function Publishing({ model }: { model: Model }) {
 
     return (
         <Layout title={ev?.eventName ? `QR掲示PDF発行: ${ev.eventName} | QRQueue` : "QR掲示PDF発行 | QRQueue"}>
-            <link rel="stylesheet" href="/css/event-publishing.css" />
             <MessageModal message={notice} onClose={() => setNotice(null)} />
             <div class="publishing-container">
                 <div class="page-title">イベント: {ev?.eventName ?? "..."}</div>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import type { SendUser } from "@/Shared/api";
+import "/css/layout.css";
+import "/css/site.css";
 
 // SvelteKit routes/+layout.svelte から移行
 // (未ログインなら /login へリダイレクトする管理画面共通レイアウト)
@@ -60,8 +62,6 @@ export default function Layout({ children, chrome = "full", title }: { children?
     return (
         <div>
             {title && <title>{title}</title>}
-            <link rel="stylesheet" href="/css/layout.css" />
-            <link rel="stylesheet" href="/css/site.css" />
             <div class="app-container">
                 <header class="layout-header">
                     <div class="header-left">
