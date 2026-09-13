@@ -23,13 +23,8 @@ export default function Index({ model }: { model: Model }) {
     const [lineLinked, setLineLinked] = useState(false);
     // LINE通知のデバッグ用: サーバー側のLINE設定が有効か(未設定なら連携ボタンを出さず無効旨を表示)
     const [lineConfigured, setLineConfigured] = useState<boolean | null>(null);
-    // 公式アカウントの友だち追加URL(未設定なら出さない)。未連携時・未追加検知時に表示する
+    // 公式アカウントの友だち追加URL(未設定なら出さない)。未連携時に表示する
     const [addFriendUrl, setAddFriendUrl] = useState<string | null>(null);
-    // テスト通知で判明した友だち登録状態(null=未確認)
-    const [friendFlag, setFriendFlag] = useState<boolean | null>(null);
-    const [lineTestSending, setLineTestSending] = useState(false);
-    // テスト通知の診断結果(画面に表示する。スマホは console が見れないため画面表示が基本)
-    const [lineDebug, setLineDebug] = useState<{ label: string; value: string }[] | null>(null);
     const [homeHintHidden, setHomeHintHidden] = useState(true);
     const [transferCode, setTransferCode] = useState<string | null>(null);
     const [transferring, setTransferring] = useState(false);
@@ -378,45 +373,6 @@ export default function Index({ model }: { model: Model }) {
         }
     }
 
-    // 実際にLINEへテスト通知を送って結果を診断する。
-    // 結果は専用のデバッグボックスに画面表示する(スマホは console を見れないため)
-    async function sendLineTestNotification() {
-        setNotice(null);
-        setLineDebug(null);
-        setLineTestSending(true);
-        try {
-            const res = await fetch(`/api/line/test/${model.ticketId}`, { method: "POST" });
-            const data = await res.json().catch(() => null);
-            setFriendFlag(typeof data?.friendFlag === "boolean" ? data.friendFlag : null);
-            const debugRows = [
-                { label: "日時", value: new Date().toLocaleString() },
-                { label: "HTTP", value: String(res.status) },
-                ...(data != null ? [
-                    { label: "サーバー設定", value: data.configured ? "設定済み" : "未設定(管理者対応が必要)" },
-                    ...(data.lineLinked != null ? [{ label: "LINE連携", value: data.lineLinked ? "連携済み" : "未連携" }] : []),
-                    ...(data.friendFlag != null ? [{ label: "友だち登録", value: data.friendFlag ? "追加済み" : "未追加(要対応)" }] : []),
-                    ...(data.pushStatus != null ? [{ label: "LINE API応答", value: `HTTP ${data.pushStatus}` }] : []),
-                    ...(data.reason ? [{ label: "原因", value: String(data.reason) }] : []),
-                    ...(data.error ? [{ label: "LINE APIエラー詳細", value: String(data.error) }] : []),
-                ] : []),
-            ];
-            setLineDebug(debugRows);
-            if (res.ok && data?.ok) {
-                setNotice(`✅ ${data.message ?? "テスト通知を送信しました"}`);
-                setNoticeKind("success");
-            } else {
-                const reason = data?.reason ?? (res.ok ? "送信に失敗しました" : `HTTP ${res.status}`);
-                setNotice(`❌ LINEテスト通知に失敗しました。下の診断結果を確認してください(${reason})`);
-                setNoticeKind("error");
-            }
-        } catch {
-            setLineDebug([{ label: "日時", value: new Date().toLocaleString() }, { label: "結果", value: "サーバーと通信できませんでした(ネットワークエラー)" }]);
-            setNotice("❌ LINEテスト通知の送信に失敗しました(通信エラー)");
-        } finally {
-            setLineTestSending(false);
-        }
-    }
-
     // LINE連携の解除
     async function unlinkLine() {
         try {
@@ -547,8 +503,8 @@ export default function Index({ model }: { model: Model }) {
                         )}
 
                         <div class="line-actions">
-                            {/* 友だち追加URL: 未連携時、またはテスト通知で未追加が判明したときに表示する */}
-                            {addFriendUrl && (!lineLinked || friendFlag === false) && (
+                            {/* 友だち追加URL: 未連携時に表示する */}
+                            {addFriendUrl && !lineLinked && (
                                 <a class="line-btn" href={addFriendUrl} target="_blank" rel="noopener">
                                     LINE公式アカウントを友だち追加する
                                 </a>
@@ -556,14 +512,6 @@ export default function Index({ model }: { model: Model }) {
                             {lineLinked ? (
                                 <>
                                     <div class="line-linked-label">LINE通知 連携済み</div>
-                                    {/* テスト通知: 実際にLINEへ送り、失敗原因(友だち未追加/トークン無効等)を表示する */}
-                                    <button
-                                        class="line-test-btn"
-                                        onClick={sendLineTestNotification}
-                                        disabled={lineTestSending}
-                                    >
-                                        {lineTestSending ? "送信中..." : "テスト通知"}
-                                    </button>
                                     <button class="line-unlink-btn" onClick={unlinkLine}>解除</button>
                                 </>
                             ) : lineConfigured === false ? (
@@ -578,21 +526,6 @@ export default function Index({ model }: { model: Model }) {
                                 </a>
                             )}
                         </div>
-                        {/* テスト通知の診断結果(スマホは console を見れないため画面にそのまま出す) */}
-                        {lineDebug && (
-                            <div class="line-debug-box">
-                                <div class="line-debug-title">LINE通知の診断結果</div>
-                                {lineDebug.map((row) => (
-                                    <div class="line-debug-row" key={row.label}>
-                                        <span class="line-debug-label">{row.label}</span>
-                                        <span class="line-debug-value">{row.value}</span>
-                                    </div>
-                                ))}
-                                <div class="line-debug-note">
-                                    スクリーンショットを撮ってスタッフにお見せください
-                                </div>
-                            </div>
-                        )}
                         <div class="header">
                             <h1>{ticketData.eventName ?? "電子券"}</h1>
                             <p>あなたの参加証(この画面が唯一の参加証です)</p>
